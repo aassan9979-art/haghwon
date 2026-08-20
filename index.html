@@ -208,7 +208,7 @@ function deriveSojae(addr){
 /* ===== 설정: 구글시트 공유 =====
    구글 Apps Script 웹앱을 배포한 뒤, 아래 API_URL 에 그 주소(.../exec)를 넣으면
    모든 기기·브라우저가 같은 변경 내용을 공유합니다. 비워두면 이 브라우저에만 저장됩니다. */
-var API_URL="__API_URL__";
+var API_URL="https://script.google.com/macros/s/AKfycbzZr1Tm4taYMcK_cV3D8AdKwl-H4nC1yyk--P-sdVvv2AhK4H7JL0SX5Y5hRN5CQhNBtA/exec";
 try{ var _u=localStorage.getItem('haghwon_api_url'); if(_u) API_URL=_u; }catch(e){}
 var SHARED=/^https:\/\//.test(API_URL);
 

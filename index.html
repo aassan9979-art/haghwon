@@ -107,9 +107,45 @@
     .wrap{padding:12px}
     th,td{padding:8px}
   }
+  /* 잠금 화면 */
+  #lockScreen{position:fixed;inset:0;z-index:9999;background:linear-gradient(160deg,#eef2ff,#f4f6f9);display:flex;align-items:center;justify-content:center;padding:20px}
+  #lockScreen.hide{display:none}
+  .lockbox{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 40px rgba(15,23,42,.12);padding:30px 26px;width:100%;max-width:340px;text-align:center}
+  .lockbox h2{margin:0 0 6px;font-size:19px}
+  .lockbox p{margin:0 0 18px;color:var(--sub);font-size:13px}
+  .lockbox input{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font-size:20px;text-align:center;letter-spacing:6px;font-variant-numeric:tabular-nums}
+  .lockbox button{width:100%;margin-top:12px;padding:12px;border:none;border-radius:10px;background:var(--brand);color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+  .lockbox button:hover{background:var(--brand-d)}
+  .lockerr{color:var(--danger);font-size:13px;margin-top:10px;min-height:18px}
 </style>
 </head>
 <body>
+<div id="lockScreen">
+  <div class="lockbox">
+    <div style="font-size:34px;margin-bottom:6px">🔒</div>
+    <h2>학원 전화번호 관리</h2>
+    <p>비밀번호를 입력하세요</p>
+    <input id="lockPw" type="password" inputmode="numeric" maxlength="12" placeholder="••••" autocomplete="off">
+    <button onclick="tryUnlock()">열기</button>
+    <div class="lockerr" id="lockErr"></div>
+  </div>
+</div>
+<script>
+var LOCK_PW="0901", LKEY="haghwon_unlocked";
+function unlock(){ document.getElementById('lockScreen').classList.add('hide'); }
+function tryUnlock(){
+  var v=document.getElementById('lockPw').value.trim();
+  if(v===LOCK_PW){ try{sessionStorage.setItem(LKEY,'1');}catch(e){} unlock(); }
+  else { document.getElementById('lockErr').textContent='비밀번호가 올바르지 않습니다.'; var i=document.getElementById('lockPw'); i.value=''; i.focus(); }
+}
+(function(){
+  try{ if(sessionStorage.getItem(LKEY)==='1'){ unlock(); return; } }catch(e){}
+  document.addEventListener('DOMContentLoaded',function(){
+    var i=document.getElementById('lockPw'); if(i){ i.focus();
+      i.addEventListener('keydown',function(e){ if(e.key==='Enter') tryUnlock(); }); }
+  });
+})();
+</script>
 <header>
   <h1>🏫 학원 전화번호 관리</h1>
   <div class="sub">시설명·시설종류·소재지·주소·운영자·전화번호·보유차량수·차량형태·차량상세 조회 및 편집</div>

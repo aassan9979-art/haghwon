@@ -36,6 +36,9 @@
   td.name{font-weight:600}
   .chip{display:inline-block;background:var(--chip);color:var(--chip-t);border-radius:20px;padding:2px 9px;font-size:12px;white-space:nowrap}
   .kchip{display:inline-block;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;font-size:12px;white-space:nowrap}
+  .schip{display:inline-block;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;white-space:nowrap}
+  .schip.sent{background:#dcfce7;color:#15803d}
+  .schip.unsent{background:#f1f5f9;color:#94a3b8}
   .tel{font-variant-numeric:tabular-nums;white-space:nowrap}
   .tel a{color:var(--brand);text-decoration:none}
   .act{white-space:nowrap;text-align:right}
@@ -79,6 +82,11 @@
   .dash-top .t{font-size:14px;font-weight:700;color:var(--txt)}
   .dash-top .total{font-size:22px;font-weight:800;color:var(--brand)}
   .dash-top .total small{font-size:13px;font-weight:600;color:var(--sub)}
+  .sbtn{cursor:pointer;border-radius:20px;padding:4px 12px;font-size:13px;font-weight:700;border:1px solid transparent}
+  .sbtn.sent{background:#dcfce7;color:#15803d}
+  .sbtn.unsent{background:#f1f5f9;color:#64748b}
+  .sbtn.on{outline:2px solid #16a34a;outline-offset:1px}
+  .sbtn.unsent.on{outline-color:#64748b}
   .dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:7px}
   .rg{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;cursor:pointer;transition:.12s}
   .rg:hover{background:#eef2ff;border-color:#c7d2fe}
@@ -110,6 +118,7 @@
 
   <div class="toolbar">
     <input id="q" class="inp" placeholder="🔍 학원명·주소·운영자·전화번호 검색">
+    <select id="fSend" class="inp"><option value="">발송 전체</option></select>
     <select id="fKind" class="inp"><option value="">전체 종류</option></select>
     <select id="fSido" class="inp"><option value="">전체 시/도</option></select>
     <select id="fGu" class="inp"><option value="">전체 시/군/구</option></select>
@@ -137,6 +146,7 @@
     <thead>
       <tr>
         <th>학원명(시설명)</th>
+        <th>발송</th>
         <th class="hide-sm">시설종류</th>
         <th class="hide-sm">소재지</th>
         <th>주소</th>
@@ -163,6 +173,10 @@
         <input id="mKind" class="inp" list="kindList" placeholder="학원/유치원 등">
         <datalist id="kindList"><option value="학원"><option value="유치원"><option value="초등학교"><option value="중학교"><option value="고등학교"><option value="특수학교"><option value="교습소"><option value="각종학교"></datalist>
       </div>
+    </div>
+    <div class="field">
+      <label>발송상태</label>
+      <select id="mSend" class="inp"><option value="미발송">미발송</option><option value="1차발송">1차발송</option></select>
     </div>
     <div class="field">
       <label>주소 *</label>
@@ -249,8 +263,8 @@ try{ var _u=localStorage.getItem('haghwon_api_url'); if(_u) API_URL=_u; }catch(e
 var SHARED=/^https:\/\//.test(API_URL);
 
 /* ===== 레코드 모델 =====
-   BASE row = [name, addr, oper, tel, tel2, tel3, carType, kind, carN, carDetail]
-   changes: id -> {status:'수정|추가|삭제', name,addr,oper,tel,tel2,carN,carT,carDetail,kind}
+   BASE row = [name, addr, oper, tel, tel2, tel3, carType, kind, carN, carDetail, send]
+   changes: id -> {status:'수정|추가|삭제', name,addr,oper,tel,tel2,carN,carT,carDetail,kind,send}
    (구글시트 각 행 = 변경분 1건. 원본 15,903건은 data.js 그대로 유지) */
 var CKEY="haghwon_changes_v2", PKEY="haghwon_pending_v2";
 var changes={};   // 공유 변경분(서버=원본, 로컬=캐시)
@@ -263,12 +277,12 @@ function saveCache(){ try{localStorage.setItem(CKEY,JSON.stringify(changes));loc
 
 function baseRec(i){
   var r=BASE[i];
-  return {id:"b"+i,name:r[0]||"",addr:r[1]||"",oper:r[2]||"",tel:r[3]||"",tel2:r[4]||"",tel3:r[5]||"",carT:r[6]||"",kind:r[7]||"",carN:(r[8]==null?"":String(r[8])),carDetail:r[9]||""};
+  return {id:"b"+i,name:r[0]||"",addr:r[1]||"",oper:r[2]||"",tel:r[3]||"",tel2:r[4]||"",tel3:r[5]||"",carT:r[6]||"",kind:r[7]||"",carN:(r[8]==null?"":String(r[8])),carDetail:r[9]||"",send:r[10]||"미발송"};
 }
 function recFromChange(id,c){
-  return {id:id,name:c.name||"",addr:c.addr||"",oper:c.oper||"",tel:c.tel||"",tel2:c.tel2||"",tel3:"",carN:(c.carN==null?"":String(c.carN)),carT:c.carT||"",carDetail:c.carDetail||"",kind:c.kind||""};
+  return {id:id,name:c.name||"",addr:c.addr||"",oper:c.oper||"",tel:c.tel||"",tel2:c.tel2||"",tel3:"",carN:(c.carN==null?"":String(c.carN)),carT:c.carT||"",carDetail:c.carDetail||"",kind:c.kind||"",send:c.send||"미발송"};
 }
-var CHFIELDS=['name','addr','oper','tel','tel2','carN','carT','carDetail','kind'];
+var CHFIELDS=['name','addr','oper','tel','tel2','carN','carT','carDetail','kind','send'];
 function mergeChange(rec,c){ CHFIELDS.forEach(function(f){ if(c[f]!==undefined) rec[f]=c[f]; }); return rec; }
 function buildRecords(){
   var out=[];
@@ -310,6 +324,15 @@ function fillSido(){
     var o=document.createElement('option'); o.value=s; o.textContent=s; sel.appendChild(o);
   });
 }
+function fillSend(){
+  var c={'1차발송':0,'미발송':0};
+  ALL.forEach(function(r){ var s=r.send||'미발송'; c[s]=(c[s]||0)+1; });
+  var sel=document.getElementById('fSend'), cur=sel.value;
+  sel.innerHTML='<option value="">발송 전체 ('+ALL.length.toLocaleString()+')</option>';
+  ['1차발송','미발송'].forEach(function(s){ var o=document.createElement('option'); o.value=s; o.textContent=s+' ('+(c[s]||0).toLocaleString()+')'; sel.appendChild(o); });
+  Object.keys(c).forEach(function(s){ if(s!=='1차발송'&&s!=='미발송'&&c[s]){ var o=document.createElement('option'); o.value=s; o.textContent=s+' ('+c[s].toLocaleString()+')'; sel.appendChild(o); } });
+  sel.value=cur;
+}
 var KIND_ORDER=['학원','교습소','유치원','초등학교','중학교','고등학교','특수학교','각종학교'];
 function fillKind(){
   var counts={}; ALL.forEach(function(r){ if(r.kind) counts[r.kind]=(counts[r.kind]||0)+1; });
@@ -340,7 +363,9 @@ function filterView(){
   var gu=document.getElementById('fGu').value;
   var car=document.getElementById('fCar').value;
   var kind=document.getElementById('fKind').value;
+  var send=document.getElementById('fSend').value;
   VIEW=ALL.filter(function(r){
+    if(send && (r.send||'미발송')!==send) return false;
     if(kind && r.kind!==kind) return false;
     if(sido && r.sido!==sido) return false;
     if(gu && r.gu!==gu) return false;
@@ -359,6 +384,7 @@ function filterView(){
   page=1;
 }
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function sendChip(s){ s=s||'미발송'; var c=(s==='1차발송')?'sent':'unsent'; return '<span class="schip '+c+'">'+esc(s)+'</span>'; }
 function telLink(t){ if(!t)return""; var d=onlyDigits(t); return '<a href="tel:'+d+'">'+esc(t)+'</a>'; }
 
 /* ===== 차량형태 셀(클릭 → 차량상세 팝업) ===== */
@@ -392,13 +418,14 @@ function render(){
   if(page>pages)page=pages;
   var start=(page-1)*PAGE, slice=VIEW.slice(start,start+PAGE);
   document.getElementById('count').innerHTML='총 <b>'+total.toLocaleString()+'</b>개 시설'+(total!==ALL.length?' (전체 '+ALL.length.toLocaleString()+'개 중)':'');
-  if(total===0){ tb.innerHTML='<tr><td colspan="9"><div class="empty">조건에 맞는 학원이 없습니다.</div></td></tr>'; document.getElementById('pager').innerHTML=''; return; }
+  if(total===0){ tb.innerHTML='<tr><td colspan="10"><div class="empty">조건에 맞는 학원이 없습니다.</div></td></tr>'; document.getElementById('pager').innerHTML=''; return; }
   var html='';
   slice.forEach(function(r){
     var added=r.id[0]==="a"?'<span class="badge-added">추가</span>':'';
     var tels=[r.tel,r.tel2,r.tel3].filter(Boolean).map(telLink).join('<br>');
     html+='<tr>'+
       '<td class="name">'+esc(r.name)+added+'</td>'+
+      '<td>'+sendChip(r.send)+'</td>'+
       '<td class="hide-sm">'+(r.kind?'<span class="kchip">'+esc(r.kind)+'</span>':'')+'</td>'+
       '<td class="hide-sm">'+(r.sojae?'<span class="chip">'+esc(r.sojae)+'</span>':'')+'</td>'+
       '<td>'+esc(r.addr)+'</td>'+
@@ -432,9 +459,13 @@ function renderStats(){
   Object.keys(counts).forEach(function(s){ if(order.indexOf(s)<0) order.push(s); }); // 기타 등 뒤로
   var cur=document.getElementById('fSido').value;
   var total=ALL.length;
+  var sent=0; ALL.forEach(function(r){ if((r.send||'미발송')==='1차발송') sent++; });
+  var curSend=document.getElementById('fSend').value;
   var html='<div class="dash-top"><span class="t">📊 전국 통학차량 시설 현황</span>'+
     '<span class="total">'+total.toLocaleString()+'<small>개</small></span>'+
-    '<span class="t" style="font-weight:400;color:var(--sub)">· '+order.length+'개 지역</span></div>';
+    '<span class="t" style="font-weight:400;color:var(--sub)">· '+order.length+'개 지역</span>'+
+    '<span class="sbtn sent'+(curSend==='1차발송'?' on':'')+'" onclick="pickSend(\'1차발송\')">1차발송 '+sent.toLocaleString()+'</span>'+
+    '<span class="sbtn unsent'+(curSend==='미발송'?' on':'')+'" onclick="pickSend(\'미발송\')">미발송 '+(total-sent).toLocaleString()+'</span></div>';
   html+='<div class="dash-grid">';
   order.forEach(function(s){
     html+='<div class="rg'+(cur===s?' on':'')+'" onclick="pickSido(\''+s+'\')">'+
@@ -448,6 +479,11 @@ function pickSido(s){
   sel.value=(sel.value===s?'':s); // 같은 지역 다시 클릭하면 해제
   fillGu(); refresh(); window.scrollTo(0,0);
 }
+function pickSend(s){
+  var sel=document.getElementById('fSend');
+  sel.value=(sel.value===s?'':s);
+  refresh(); window.scrollTo(0,0);
+}
 
 function refresh(){ filterView(); render(); renderStats(); }
 
@@ -456,8 +492,8 @@ var editingId=null;
 function openForm(id){
   editingId=id||null;
   document.getElementById('mTitle').textContent=id?'학원 수정':'학원 추가';
-  var r=id?ALL.find(function(x){return x.id===id;}):{name:"",addr:"",oper:"",tel:"",tel2:"",carN:"",carT:"",carDetail:"",kind:""};
-  mName.value=r.name||""; mAddr.value=r.addr||""; mOper.value=r.oper||""; mKind.value=r.kind||"";
+  var r=id?ALL.find(function(x){return x.id===id;}):{name:"",addr:"",oper:"",tel:"",tel2:"",carN:"",carT:"",carDetail:"",kind:"",send:"미발송"};
+  mName.value=r.name||""; mAddr.value=r.addr||""; mOper.value=r.oper||""; mKind.value=r.kind||""; mSend.value=r.send||"미발송";
   mTel.value=r.tel||""; mTel2.value=r.tel2||""; mCarN.value=r.carN||""; mCarT.value=r.carT||""; mCarDetail.value=r.carDetail||"";
   previewSojae();
   document.getElementById('mask').classList.add('on');
@@ -468,22 +504,22 @@ function saveForm(){
   var name=mName.value.trim(), addr=mAddr.value.trim();
   if(!name){alert('학원명을 입력하세요.');return;}
   if(!addr){alert('주소를 입력하세요.');return;}
-  var data={name:name,addr:addr,oper:mOper.value.trim(),tel:mTel.value.trim(),tel2:mTel2.value.trim(),carN:mCarN.value.trim(),carT:mCarT.value.trim(),carDetail:mCarDetail.value.trim(),kind:mKind.value.trim()};
+  var data={name:name,addr:addr,oper:mOper.value.trim(),tel:mTel.value.trim(),tel2:mTel2.value.trim(),carN:mCarN.value.trim(),carT:mCarT.value.trim(),carDetail:mCarDetail.value.trim(),kind:mKind.value.trim(),send:mSend.value};
   var id, status;
   if(editingId){ id=editingId; status=(id.charAt(0)==='a')?'추가':'수정'; }
   else { id='a'+Date.now()+Math.floor(Math.random()*1000); status='추가'; }
   data.status=status;
   changes[id]=data;
   saveCache(); pushToServer(id,data);
-  rebuild(); fillKind(); closeForm(); refresh();
+  rebuild(); fillKind(); fillSend(); closeForm(); refresh();
 }
 function delRec(id){
   var r=ALL.find(function(x){return x.id===id;});
   if(!confirm('삭제하시겠습니까?'+(SHARED?' (모든 기기에서 삭제됩니다)':'')+'\n\n'+(r?r.name:'')+'\n'+(r?r.addr:''))) return;
-  var snap={status:'삭제',name:r?r.name:'',addr:r?r.addr:'',oper:r?r.oper:'',tel:r?r.tel:'',tel2:r?r.tel2:'',carN:r?r.carN:'',carT:r?r.carT:'',carDetail:r?r.carDetail:'',kind:r?r.kind:''};
+  var snap={status:'삭제',name:r?r.name:'',addr:r?r.addr:'',oper:r?r.oper:'',tel:r?r.tel:'',tel2:r?r.tel2:'',carN:r?r.carN:'',carT:r?r.carT:'',carDetail:r?r.carDetail:'',kind:r?r.kind:'',send:r?r.send:''};
   changes[id]=snap;
   saveCache(); pushToServer(id,snap);
-  rebuild(); fillKind(); refresh();
+  rebuild(); fillKind(); fillSend(); refresh();
 }
 function resetAll(){
   if(SHARED){
@@ -520,8 +556,8 @@ function restore(inp){
 }
 function csvCell(s){ s=(s==null?"":String(s)); if(/[",\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
 function exportCSV(){
-  var rows=[['학원명','시설종류','소재지','주소','운영자','전화번호','전화번호2','전화번호3','보유차량수','차량형태','차량상세']];
-  VIEW.forEach(function(r){ rows.push([r.name,r.kind,r.sojae,r.addr,r.oper,r.tel,r.tel2,r.tel3,r.carN,r.carT,r.carDetail]); });
+  var rows=[['학원명','발송상태','시설종류','소재지','주소','운영자','전화번호','전화번호2','전화번호3','보유차량수','차량형태','차량상세']];
+  VIEW.forEach(function(r){ rows.push([r.name,r.send,r.kind,r.sojae,r.addr,r.oper,r.tel,r.tel2,r.tel3,r.carN,r.carT,r.carDetail]); });
   var csv=rows.map(function(row){return row.map(csvCell).join(',');}).join('\r\n');
   dl('학원목록_'+stamp()+'.csv','﻿'+csv,'text/csv;charset=utf-8');
 }
@@ -553,7 +589,7 @@ function loadFromServer(){
   setSync('loading');
   fetch(API_URL,{method:'GET'}).then(function(r){return r.json();}).then(function(res){
     if(res&&res.ok&&res.rows){
-      var srv={}; res.rows.forEach(function(row){ srv[row.id]={status:row.status,name:row.name,addr:row.addr,oper:row.oper,tel:row.tel,tel2:row.tel2,carN:row.carN,carT:row.carT,carDetail:row.carDetail,kind:row.kind}; });
+      var srv={}; res.rows.forEach(function(row){ srv[row.id]={status:row.status,name:row.name,addr:row.addr,oper:row.oper,tel:row.tel,tel2:row.tel2,carN:row.carN,carT:row.carT,carDetail:row.carDetail,kind:row.kind,send:row.send}; });
       pending.forEach(function(p){ srv[p.id]=p; }); // 미전송 로컬 변경은 유지
       changes=srv; saveCache(); setSync(pending.length?'err':'ok');
     } else setSync('offline');
@@ -563,16 +599,17 @@ function loadFromServer(){
 
 /* ===== 초기화 ===== */
 function rebuild(){ ALL=buildRecords(); computeDerived(); }
-function rebuildAll(){ rebuild(); buildRegionIndex(); rebuildSido(); fillKind(); refresh(); }
+function rebuildAll(){ rebuild(); buildRegionIndex(); rebuildSido(); fillKind(); fillSend(); refresh(); }
 function rebuildSido(){
   var sel=document.getElementById('fSido'), cur=sel.value;
   sel.innerHTML='<option value="">전체 시/도</option>'; fillSido(); sel.value=cur;
 }
 function init(){
   loadCache();
-  rebuild(); buildRegionIndex(); fillSido(); fillGu(); fillKind();
+  rebuild(); buildRegionIndex(); fillSido(); fillGu(); fillKind(); fillSend();
   applySharedUI();
   document.getElementById('q').addEventListener('input',debounce(refresh,200));
+  document.getElementById('fSend').addEventListener('change',refresh);
   document.getElementById('fKind').addEventListener('change',refresh);
   document.getElementById('fSido').addEventListener('change',function(){fillGu();refresh();});
   document.getElementById('fGu').addEventListener('change',refresh);

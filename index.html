@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>학원 전화번호 관리</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --card:#fff; --line:#e3e8ef; --txt:#1f2937; --sub:#6b7280;
+    --brand:#2563eb; --brand-d:#1d4ed8; --danger:#dc2626; --ok:#059669;
+    --chip:#eef2ff; --chip-t:#3730a3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;background:var(--bg);color:var(--txt);font-size:14px}
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:14px 18px;position:sticky;top:0;z-index:20}
+  header h1{margin:0;font-size:18px;display:flex;align-items:center;gap:8px}
+  header .sub{color:var(--sub);font-size:12px;margin-top:3px}
+  .wrap{max-width:1200px;margin:0 auto;padding:16px 18px 60px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+  input,select,button,textarea{font-family:inherit;font-size:14px}
+  .inp{padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--txt)}
+  #q{flex:1;min-width:200px}
+  .btn{padding:9px 14px;border:none;border-radius:8px;cursor:pointer;font-weight:600}
+  .btn-p{background:var(--brand);color:#fff}
+  .btn-p:hover{background:var(--brand-d)}
+  .btn-g{background:#eef1f5;color:#334155}
+  .btn-g:hover{background:#e2e8f0}
+  .btn-d{background:#fff;color:var(--danger);border:1px solid #f3c6c6}
+  .btn-d:hover{background:#fef2f2}
+  .count{color:var(--sub);font-size:13px;margin:6px 2px}
+  .count b{color:var(--brand)}
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f8fafc;font-size:12px;color:var(--sub);position:sticky;top:0;white-space:nowrap}
+  tr:hover td{background:#f9fbff}
+  td.name{font-weight:600}
+  .chip{display:inline-block;background:var(--chip);color:var(--chip-t);border-radius:20px;padding:2px 9px;font-size:12px;white-space:nowrap}
+  .tel{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tel a{color:var(--brand);text-decoration:none}
+  .act{white-space:nowrap;text-align:right}
+  .mini{padding:5px 9px;font-size:12px;border-radius:6px;border:none;cursor:pointer;margin-left:4px}
+  .mini.e{background:#eef2ff;color:#3730a3}
+  .mini.d{background:#fef2f2;color:var(--danger)}
+  .pager{display:flex;gap:6px;align-items:center;justify-content:center;margin:16px 0;flex-wrap:wrap}
+  .pager button{padding:7px 12px;border:1px solid var(--line);background:#fff;border-radius:7px;cursor:pointer}
+  .pager button:disabled{opacity:.4;cursor:default}
+  .pager .pg{font-size:13px;color:var(--sub)}
+  .empty{text-align:center;padding:60px 20px;color:var(--sub)}
+  .badge-added{background:#ecfdf5;color:#047857;font-size:11px;border-radius:5px;padding:1px 5px;margin-left:5px}
+  /* modal */
+  .mask{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+  .mask.on{display:flex}
+  .modal{background:#fff;border-radius:14px;width:100%;max-width:520px;max-height:90vh;overflow:auto;padding:22px}
+  .modal h2{margin:0 0 14px;font-size:17px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:12px;color:var(--sub);margin-bottom:4px;font-weight:600}
+  .field input{width:100%}
+  .field .hint{font-size:11px;color:var(--sub);margin-top:3px}
+  .row2{display:flex;gap:8px}
+  .row2>div{flex:1}
+  .modal-act{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+  .notice{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-bottom:12px;line-height:1.5}
+  @media(max-width:720px){
+    .hide-sm{display:none}
+    .wrap{padding:12px}
+    th,td{padding:8px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏫 학원 전화번호 관리</h1>
+  <div class="sub">시설명·소재지·주소·운영자·전화번호·보유차량수·차량형태 조회 및 편집</div>
+</header>
+
+<div class="wrap">
+  <div class="notice">
+    ⚠️ 추가·수정·삭제한 내용은 <b>이 브라우저에만</b> 저장됩니다(다른 기기와 공유 안 됨).
+    중요한 변경은 <b>[백업(내보내기)]</b>로 파일 저장을 권장합니다. 원본 데이터는 항상 유지됩니다.
+  </div>
+
+  <div class="toolbar">
+    <input id="q" class="inp" placeholder="🔍 학원명·주소·운영자·전화번호 검색">
+    <select id="fSido" class="inp"><option value="">전체 시/도</option></select>
+    <select id="fGu" class="inp"><option value="">전체 시/군/구</option></select>
+    <select id="fCar" class="inp">
+      <option value="">차량 전체</option>
+      <option value="__has">차량 보유(있음)</option>
+      <option value="__none">차량 없음</option>
+    </select>
+    <button class="btn btn-p" onclick="openForm()">+ 학원 추가</button>
+  </div>
+  <div class="toolbar" style="margin-top:-4px">
+    <button class="btn btn-g" onclick="exportCSV()">⬇ 엑셀(CSV) 내보내기</button>
+    <button class="btn btn-g" onclick="backup()">💾 백업(내보내기)</button>
+    <button class="btn btn-g" onclick="document.getElementById('restoreFile').click()">↩ 백업 복원</button>
+    <input type="file" id="restoreFile" accept=".json" style="display:none" onchange="restore(this)">
+    <button class="btn btn-d" onclick="resetAll()">변경 초기화</button>
+  </div>
+
+  <div class="count" id="count"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>학원명(시설명)</th>
+        <th class="hide-sm">소재지</th>
+        <th>주소</th>
+        <th class="hide-sm">운영자</th>
+        <th>전화번호</th>
+        <th class="hide-sm">보유<br>차량수</th>
+        <th>차량형태</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <div class="pager" id="pager"></div>
+</div>
+
+<!-- 편집 모달 -->
+<div class="mask" id="mask">
+  <div class="modal">
+    <h2 id="mTitle">학원 추가</h2>
+    <div class="field">
+      <label>학원명(시설명) *</label>
+      <input id="mName" class="inp">
+    </div>
+    <div class="field">
+      <label>주소 *</label>
+      <input id="mAddr" class="inp" oninput="previewSojae()">
+      <div class="hint">소재지는 주소에서 자동으로 뽑힙니다 → <b id="mSojae">-</b></div>
+    </div>
+    <div class="field">
+      <label>운영자</label>
+      <input id="mOper" class="inp">
+    </div>
+    <div class="row2">
+      <div class="field"><label>전화번호</label><input id="mTel" class="inp" placeholder="033-000-0000"></div>
+      <div class="field"><label>전화번호2</label><input id="mTel2" class="inp"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>보유차량수</label><input id="mCarN" class="inp" placeholder="예: 2"></div>
+      <div class="field"><label>차량형태</label><input id="mCarT" class="inp" placeholder="예: 스타렉스 / 없음"></div>
+    </div>
+    <div class="modal-act">
+      <button class="btn btn-g" onclick="closeForm()">취소</button>
+      <button class="btn btn-p" onclick="saveForm()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script>
+/* ===== 소재지 자동 분리 ===== */
+var SIDO_MAP={
+ "서울특별시":"서울","부산광역시":"부산","대구광역시":"대구","인천광역시":"인천",
+ "광주광역시":"광주","대전광역시":"대전","울산광역시":"울산","세종특별자치시":"세종",
+ "경기도":"경기","강원도":"강원","강원특별자치도":"강원","충청북도":"충북","충청남도":"충남",
+ "전라북도":"전북","전북특별자치도":"전북","전라남도":"전남","경상북도":"경북","경상남도":"경남",
+ "제주도":"제주","제주특별자치도":"제주"
+};
+var SHORT=["서울","부산","대구","인천","광주","대전","울산","세종","경기","강원","충북","충남","전북","전남","경북","경남","제주"];
+var SIDO_ALIAS={"서울시":"서울","부산시":"부산","인천시":"인천","대구시":"대구","광주시":"광주","대전시":"대전","울산시":"울산"};
+function normSido(t){
+  if(!t)return null;
+  if(SIDO_MAP[t])return SIDO_MAP[t];
+  if(SHORT.indexOf(t)>=0)return t;
+  if(SIDO_ALIAS[t])return SIDO_ALIAS[t];
+  for(var i=0;i<SHORT.length;i++){ if(t.indexOf(SHORT[i])===0) return SHORT[i]; } // 강원특별자치도 등 변형
+  return null; // 시/도 미상
+}
+function deriveSojae(addr){
+  if(!addr) return {sido:"",gu:"",label:""};
+  var p=addr.trim().split(/\s+/);
+  var sido=normSido(p[0]);
+  if(sido===null) return {sido:"기타",gu:"",label:p[0]}; // 주소 앞에 시/도가 없는 예외
+  if(sido==="세종") return {sido:"세종",gu:"",label:"세종"};
+  var gu=p[1]||"";
+  // 구가 "구/시/군"으로 끝나지 않으면 소재지에서 제외
+  if(gu && !/[구시군]$/.test(gu)) gu="";
+  var label=gu?(sido+" "+gu):sido;
+  return {sido:sido,gu:gu,label:label};
+}
+
+/* ===== 레코드 모델 ===== */
+// BASE row = [name, addr, oper, tel, tel2, tel3, carType]
+var OKEY="haghwon_overlay_v1";
+var overlay={edits:{},deletes:[],adds:[],seq:1};
+function loadOverlay(){ try{var o=JSON.parse(localStorage.getItem(OKEY)); if(o){overlay=o; overlay.edits=overlay.edits||{}; overlay.deletes=overlay.deletes||[]; overlay.adds=overlay.adds||[]; overlay.seq=overlay.seq||1;}}catch(e){} }
+function saveOverlay(){ try{localStorage.setItem(OKEY,JSON.stringify(overlay));}catch(e){alert("저장 공간이 부족합니다. 오래된 변경을 정리하거나 백업 후 초기화하세요.");} }
+
+function baseRec(i){
+  var r=BASE[i];
+  return {id:"b"+i,name:r[0]||"",addr:r[1]||"",oper:r[2]||"",tel:r[3]||"",tel2:r[4]||"",tel3:r[5]||"",carN:"",carT:r[6]||""};
+}
+function applyEdit(rec){
+  var e=overlay.edits[rec.id];
+  if(e){ for(var k in e){ rec[k]=e[k]; } }
+  return rec;
+}
+function buildRecords(){
+  var out=[];
+  var del={}; overlay.deletes.forEach(function(id){del[id]=1;});
+  for(var i=0;i<BASE.length;i++){
+    var id="b"+i;
+    if(del[id]) continue;
+    out.push(applyEdit(baseRec(i)));
+  }
+  overlay.adds.forEach(function(a){
+    if(del[a.id]) return;
+    var rec={id:a.id,name:a.name||"",addr:a.addr||"",oper:a.oper||"",tel:a.tel||"",tel2:a.tel2||"",tel3:a.tel3||"",carN:a.carN||"",carT:a.carT||""};
+    out.push(applyEdit(rec));
+  });
+  return out;
+}
+
+/* ===== 상태 ===== */
+var ALL=[], VIEW=[], page=1, PAGE=100;
+var regionIndex={}; // sido -> Set(gu)
+
+function computeDerived(){
+  ALL.forEach(function(r){ var s=deriveSojae(r.addr); r.sido=s.sido; r.gu=s.gu; r.sojae=s.label; });
+}
+function buildRegionIndex(){
+  regionIndex={};
+  ALL.forEach(function(r){
+    if(!r.sido) return;
+    if(!regionIndex[r.sido]) regionIndex[r.sido]={};
+    if(r.gu) regionIndex[r.sido][r.gu]=1;
+  });
+}
+function fillSido(){
+  var sel=document.getElementById('fSido');
+  var order=SHORT.filter(function(s){return regionIndex[s];});
+  Object.keys(regionIndex).forEach(function(s){ if(order.indexOf(s)<0)order.push(s); });
+  order.forEach(function(s){
+    var o=document.createElement('option'); o.value=s; o.textContent=s; sel.appendChild(o);
+  });
+}
+function fillGu(){
+  var sido=document.getElementById('fSido').value;
+  var sel=document.getElementById('fGu');
+  sel.innerHTML='<option value="">전체 시/군/구</option>';
+  if(sido&&regionIndex[sido]){
+    Object.keys(regionIndex[sido]).sort().forEach(function(g){
+      var o=document.createElement('option'); o.value=g; o.textContent=g; sel.appendChild(o);
+    });
+  }
+}
+
+/* ===== 필터/렌더 ===== */
+function onlyDigits(s){return (s||"").replace(/[^0-9]/g,"");}
+function filterView(){
+  var q=document.getElementById('q').value.trim().toLowerCase();
+  var qd=onlyDigits(q);
+  var sido=document.getElementById('fSido').value;
+  var gu=document.getElementById('fGu').value;
+  var car=document.getElementById('fCar').value;
+  VIEW=ALL.filter(function(r){
+    if(sido && r.sido!==sido) return false;
+    if(gu && r.gu!==gu) return false;
+    if(car==="__none" && !( (r.carT||"").indexOf("없음")>=0 || (!r.carT && !r.carN) )) {
+      // "없음" 명시 or 둘 다 비어있음
+    }
+    if(car==="__has"){ var has=(r.carN&&onlyDigits(r.carN)!=="0"&&onlyDigits(r.carN)!=="")||( r.carT && r.carT.indexOf("없음")<0 && r.carT.trim()!==""); if(!has)return false; }
+    if(car==="__none"){ var none=((r.carT||"").indexOf("없음")>=0)||((!r.carT||r.carT.trim()==="")&&(!r.carN||r.carN.trim()==="")); if(!none)return false; }
+    if(q){
+      var hay=(r.name+" "+r.addr+" "+r.oper+" "+r.carT).toLowerCase();
+      var telHay=onlyDigits(r.tel+r.tel2+r.tel3);
+      if(hay.indexOf(q)<0 && !(qd && telHay.indexOf(qd)>=0)) return false;
+    }
+    return true;
+  });
+  page=1;
+}
+function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function telLink(t){ if(!t)return""; var d=onlyDigits(t); return '<a href="tel:'+d+'">'+esc(t)+'</a>'; }
+
+function render(){
+  var tb=document.getElementById('tbody');
+  var total=VIEW.length;
+  var pages=Math.max(1,Math.ceil(total/PAGE));
+  if(page>pages)page=pages;
+  var start=(page-1)*PAGE, slice=VIEW.slice(start,start+PAGE);
+  document.getElementById('count').innerHTML='총 <b>'+total.toLocaleString()+'</b>개 학원'+(total!==ALL.length?' (전체 '+ALL.length.toLocaleString()+'개 중)':'');
+  if(total===0){ tb.innerHTML='<tr><td colspan="8"><div class="empty">조건에 맞는 학원이 없습니다.</div></td></tr>'; document.getElementById('pager').innerHTML=''; return; }
+  var html='';
+  slice.forEach(function(r){
+    var added=r.id[0]==="a"?'<span class="badge-added">추가</span>':'';
+    var tels=[r.tel,r.tel2,r.tel3].filter(Boolean).map(telLink).join('<br>');
+    html+='<tr>'+
+      '<td class="name">'+esc(r.name)+added+'</td>'+
+      '<td class="hide-sm">'+(r.sojae?'<span class="chip">'+esc(r.sojae)+'</span>':'')+'</td>'+
+      '<td>'+esc(r.addr)+'</td>'+
+      '<td class="hide-sm">'+esc(r.oper)+'</td>'+
+      '<td class="tel">'+tels+'</td>'+
+      '<td class="hide-sm">'+esc(r.carN)+'</td>'+
+      '<td>'+esc(r.carT)+'</td>'+
+      '<td class="act">'+
+        '<button class="mini e" onclick="openForm(\''+r.id+'\')">수정</button>'+
+        '<button class="mini d" onclick="delRec(\''+r.id+'\')">삭제</button>'+
+      '</td></tr>';
+  });
+  tb.innerHTML=html;
+  renderPager(pages);
+}
+function renderPager(pages){
+  var p=document.getElementById('pager');
+  if(pages<=1){p.innerHTML='';return;}
+  p.innerHTML=
+    '<button onclick="go(1)" '+(page===1?'disabled':'')+'>« 처음</button>'+
+    '<button onclick="go('+(page-1)+')" '+(page===1?'disabled':'')+'>‹ 이전</button>'+
+    '<span class="pg">'+page+' / '+pages+' 페이지</span>'+
+    '<button onclick="go('+(page+1)+')" '+(page===pages?'disabled':'')+'>다음 ›</button>'+
+    '<button onclick="go('+pages+')" '+(page===pages?'disabled':'')+'>끝 »</button>';
+}
+function go(n){page=n; render(); window.scrollTo(0,0);}
+function refresh(){ filterView(); render(); }
+
+/* ===== 추가/수정 ===== */
+var editingId=null;
+function openForm(id){
+  editingId=id||null;
+  document.getElementById('mTitle').textContent=id?'학원 수정':'학원 추가';
+  var r=id?ALL.find(function(x){return x.id===id;}):{name:"",addr:"",oper:"",tel:"",tel2:"",carN:"",carT:""};
+  mName.value=r.name||""; mAddr.value=r.addr||""; mOper.value=r.oper||"";
+  mTel.value=r.tel||""; mTel2.value=r.tel2||""; mCarN.value=r.carN||""; mCarT.value=r.carT||"";
+  previewSojae();
+  document.getElementById('mask').classList.add('on');
+}
+function closeForm(){ document.getElementById('mask').classList.remove('on'); editingId=null; }
+function previewSojae(){ document.getElementById('mSojae').textContent=deriveSojae(mAddr.value).label||'-'; }
+function saveForm(){
+  var name=mName.value.trim(), addr=mAddr.value.trim();
+  if(!name){alert('학원명을 입력하세요.');return;}
+  if(!addr){alert('주소를 입력하세요.');return;}
+  var data={name:name,addr:addr,oper:mOper.value.trim(),tel:mTel.value.trim(),tel2:mTel2.value.trim(),tel3:"",carN:mCarN.value.trim(),carT:mCarT.value.trim()};
+  if(editingId){
+    if(editingId[0]==="a"){
+      var a=overlay.adds.find(function(x){return x.id===editingId;});
+      if(a){Object.assign(a,data);}
+    } else {
+      overlay.edits[editingId]=data;
+    }
+  } else {
+    var id="a"+(overlay.seq++);
+    data.id=id; overlay.adds.push(data);
+  }
+  saveOverlay(); rebuild(); closeForm(); refresh();
+}
+function delRec(id){
+  var r=ALL.find(function(x){return x.id===id;});
+  if(!confirm('삭제하시겠습니까?\n\n'+(r?r.name:'')+'\n'+(r?r.addr:''))) return;
+  if(id[0]==="a"){ overlay.adds=overlay.adds.filter(function(x){return x.id!==id;}); }
+  else { if(overlay.deletes.indexOf(id)<0)overlay.deletes.push(id); delete overlay.edits[id]; }
+  saveOverlay(); rebuild(); refresh();
+}
+function resetAll(){
+  if(!confirm('추가·수정·삭제한 모든 변경을 지우고 원본 상태로 되돌립니다.\n계속할까요?')) return;
+  overlay={edits:{},deletes:[],adds:[],seq:1}; saveOverlay(); rebuild(); refresh();
+}
+
+/* ===== 백업/복원/내보내기 ===== */
+function dl(name,text,type){
+  var blob=new Blob([text],{type:type||'text/plain;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+}
+function backup(){ dl('학원관리_백업_'+stamp()+'.json',JSON.stringify(overlay),'application/json'); }
+function restore(inp){
+  var f=inp.files[0]; if(!f)return;
+  var rd=new FileReader();
+  rd.onload=function(){ try{var o=JSON.parse(rd.result); overlay=o; overlay.edits=overlay.edits||{};overlay.deletes=overlay.deletes||[];overlay.adds=overlay.adds||[];overlay.seq=overlay.seq||1; saveOverlay(); rebuild(); refresh(); alert('복원되었습니다.'); }catch(e){alert('올바른 백업 파일이 아닙니다.');} inp.value=''; };
+  rd.readAsText(f);
+}
+function csvCell(s){ s=(s==null?"":String(s)); if(/[",\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
+function exportCSV(){
+  var rows=[['학원명','소재지','주소','운영자','전화번호','전화번호2','전화번호3','보유차량수','차량형태']];
+  VIEW.forEach(function(r){ rows.push([r.name,r.sojae,r.addr,r.oper,r.tel,r.tel2,r.tel3,r.carN,r.carT]); });
+  var csv=rows.map(function(row){return row.map(csvCell).join(',');}).join('\r\n');
+  dl('학원목록_'+stamp()+'.csv','﻿'+csv,'text/csv;charset=utf-8');
+}
+function stamp(){var d=new Date();function z(n){return(n<10?'0':'')+n;}return d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+'_'+z(d.getHours())+z(d.getMinutes());}
+
+/* ===== 초기화 ===== */
+function rebuild(){ ALL=buildRecords(); computeDerived(); }
+function init(){
+  loadOverlay();
+  rebuild();
+  buildRegionIndex(); fillSido(); fillGu();
+  document.getElementById('q').addEventListener('input',debounce(refresh,200));
+  document.getElementById('fSido').addEventListener('change',function(){fillGu();refresh();});
+  document.getElementById('fGu').addEventListener('change',refresh);
+  document.getElementById('fCar').addEventListener('change',refresh);
+  document.getElementById('mask').addEventListener('click',function(e){if(e.target===this)closeForm();});
+  refresh();
+}
+function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
+window.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>

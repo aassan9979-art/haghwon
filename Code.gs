@@ -6,7 +6,7 @@
  * 헤더 이름 기준으로 읽고 쓰므로, 나중에 열이 늘어도 안전합니다.
  */
 var SHEET_NAME = '변경사항';
-var HEADERS = ['id','상태','학원명','시설종류','발송상태','주소','운영자','전화번호','전화번호2','보유차량수','차량형태','차량상세','갱신시각'];
+var HEADERS = ['id','상태','학원명','시설종류','발송상태','주소','운영자','전화번호','전화번호2','보유차량수','차량형태','차량상세','상담이력','갱신시각'];
 
 function getSheetAndMap_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -43,7 +43,7 @@ function doGet(e) {
       id: String(id), status: g(row, '상태'), name: g(row, '학원명'), kind: g(row, '시설종류'), send: g(row, '발송상태'), addr: g(row, '주소'),
       oper: g(row, '운영자'), tel: g(row, '전화번호'), tel2: g(row, '전화번호2'),
       carN: (g(row, '보유차량수') === '' ? '' : String(g(row, '보유차량수'))),
-      carT: g(row, '차량형태'), carDetail: g(row, '차량상세')
+      carT: g(row, '차량형태'), carDetail: g(row, '차량상세'), consult: g(row, '상담이력')
     });
   }
   return json_({ ok: true, rows: rows });
@@ -68,6 +68,7 @@ function doPost(e) {
     set('id', d.id); set('상태', d.status || ''); set('학원명', d.name || ''); set('시설종류', d.kind || ''); set('발송상태', d.send || ''); set('주소', d.addr || '');
     set('운영자', d.oper || ''); set('전화번호', d.tel || ''); set('전화번호2', d.tel2 || '');
     set('보유차량수', d.carN || ''); set('차량형태', d.carT || ''); set('차량상세', d.carDetail || '');
+    set('상담이력', d.consult || '');
     set('갱신시각', new Date());
     return json_({ ok: true });
   } catch (err) {

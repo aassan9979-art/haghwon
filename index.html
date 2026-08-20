@@ -45,6 +45,8 @@
   .mini{padding:5px 9px;font-size:12px;border-radius:6px;border:none;cursor:pointer;margin-left:4px}
   .mini.e{background:#eef2ff;color:#3730a3}
   .mini.d{background:#fef2f2;color:var(--danger)}
+  .mini.con{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa}
+  .mini.con.has{background:#f59e0b;color:#fff;border-color:#f59e0b}
   .pager{display:flex;gap:6px;align-items:center;justify-content:center;margin:16px 0;flex-wrap:wrap}
   .pager button{padding:7px 12px;border:1px solid var(--line);background:#fff;border-radius:7px;cursor:pointer}
   .pager button:disabled{opacity:.4;cursor:default}
@@ -222,6 +224,27 @@
   </div>
 </div>
 
+<!-- 상담입력 모달 -->
+<div class="mask" id="cnMask">
+  <div class="modal" style="max-width:560px">
+    <h2 id="cnTitle">상담</h2>
+    <div id="cnPhone" style="margin:-6px 0 12px;font-size:14px"></div>
+    <div class="field">
+      <label>새 상담 내용 (전화 상담 후 입력 → [상담 추가])</label>
+      <textarea id="cnNew" class="inp" rows="3" placeholder="예: 담당자 통화, 통학차량 견적 문의. 다음주 재통화 예정." style="width:100%;resize:vertical"></textarea>
+      <div style="margin-top:6px"><button class="btn btn-p" onclick="cnAddToday()">＋ 상담 추가(날짜 자동)</button></div>
+    </div>
+    <div class="field">
+      <label>상담 이력 (최신순 · 직접 수정 가능)</label>
+      <textarea id="cnText" class="inp" rows="8" placeholder="아직 상담 기록이 없습니다." style="width:100%;resize:vertical;font-size:13px;line-height:1.6"></textarea>
+    </div>
+    <div class="modal-act">
+      <button class="btn btn-g" onclick="closeConsult()">닫기</button>
+      <button class="btn btn-p" onclick="cnSave();closeConsult()">이력 저장</button>
+    </div>
+  </div>
+</div>
+
 <script src="data.js"></script>
 <script>
 /* ===== 소재지 자동 분리 ===== */
@@ -264,8 +287,9 @@ var SHARED=/^https:\/\//.test(API_URL);
 
 /* ===== 레코드 모델 =====
    BASE row = [name, addr, oper, tel, tel2, tel3, carType, kind, carN, carDetail, send]
-   changes: id -> {status:'수정|추가|삭제', name,addr,oper,tel,tel2,carN,carT,carDetail,kind,send}
-   (구글시트 각 행 = 변경분 1건. 원본 15,903건은 data.js 그대로 유지) */
+   changes: id -> {status:'수정|추가|삭제', name,addr,oper,tel,tel2,carN,carT,carDetail,kind,send,consult}
+   consult=상담이력(원본에 없어 오버레이에만 저장).
+   구글시트 각 행 = 변경분 1건. 원본 15,903건은 data.js 그대로 유지 */
 var CKEY="haghwon_changes_v2", PKEY="haghwon_pending_v2";
 var changes={};   // 공유 변경분(서버=원본, 로컬=캐시)
 var pending=[];   // 서버 전송 실패분(오프라인 대기)
@@ -277,12 +301,12 @@ function saveCache(){ try{localStorage.setItem(CKEY,JSON.stringify(changes));loc
 
 function baseRec(i){
   var r=BASE[i];
-  return {id:"b"+i,name:r[0]||"",addr:r[1]||"",oper:r[2]||"",tel:r[3]||"",tel2:r[4]||"",tel3:r[5]||"",carT:r[6]||"",kind:r[7]||"",carN:(r[8]==null?"":String(r[8])),carDetail:r[9]||"",send:r[10]||"미발송"};
+  return {id:"b"+i,name:r[0]||"",addr:r[1]||"",oper:r[2]||"",tel:r[3]||"",tel2:r[4]||"",tel3:r[5]||"",carT:r[6]||"",kind:r[7]||"",carN:(r[8]==null?"":String(r[8])),carDetail:r[9]||"",send:r[10]||"미발송",consult:""};
 }
 function recFromChange(id,c){
-  return {id:id,name:c.name||"",addr:c.addr||"",oper:c.oper||"",tel:c.tel||"",tel2:c.tel2||"",tel3:"",carN:(c.carN==null?"":String(c.carN)),carT:c.carT||"",carDetail:c.carDetail||"",kind:c.kind||"",send:c.send||"미발송"};
+  return {id:id,name:c.name||"",addr:c.addr||"",oper:c.oper||"",tel:c.tel||"",tel2:c.tel2||"",tel3:"",carN:(c.carN==null?"":String(c.carN)),carT:c.carT||"",carDetail:c.carDetail||"",kind:c.kind||"",send:c.send||"미발송",consult:c.consult||""};
 }
-var CHFIELDS=['name','addr','oper','tel','tel2','carN','carT','carDetail','kind','send'];
+var CHFIELDS=['name','addr','oper','tel','tel2','carN','carT','carDetail','kind','send','consult'];
 function mergeChange(rec,c){ CHFIELDS.forEach(function(f){ if(c[f]!==undefined) rec[f]=c[f]; }); return rec; }
 function buildRecords(){
   var out=[];
@@ -375,7 +399,7 @@ function filterView(){
     if(car==="__has"){ var has=(r.carN&&onlyDigits(r.carN)!=="0"&&onlyDigits(r.carN)!=="")||( r.carT && r.carT.indexOf("없음")<0 && r.carT.trim()!==""); if(!has)return false; }
     if(car==="__none"){ var none=((r.carT||"").indexOf("없음")>=0)||((!r.carT||r.carT.trim()==="")&&(!r.carN||r.carN.trim()==="")); if(!none)return false; }
     if(q){
-      var hay=(r.name+" "+r.addr+" "+r.oper+" "+r.carT+" "+r.carDetail+" "+r.kind).toLowerCase();
+      var hay=(r.name+" "+r.addr+" "+r.oper+" "+r.carT+" "+r.carDetail+" "+r.kind+" "+r.consult).toLowerCase();
       var telHay=onlyDigits(r.tel+r.tel2+r.tel3);
       if(hay.indexOf(q)<0 && !(qd && telHay.indexOf(qd)>=0)) return false;
     }
@@ -395,6 +419,50 @@ function carCell(r){
   var text=t||(has?"차량 있음":"");
   if(!text) return '<span class="carcell empty" title="클릭해 차량정보 입력" onclick="openCarInfo(\''+r.id+'\')">–</span>';
   return '<span class="carcell'+(has?' has':'')+'" title="클릭해 차량상세 보기" onclick="openCarInfo(\''+r.id+'\')">'+esc(text)+(has?' 🔎':'')+'</span>';
+}
+/* ===== 상담입력 ===== */
+function consultCount(s){ s=(s||"").trim(); if(!s)return 0; return s.split(/\n+/).filter(function(x){return x.trim()!=="";}).length; }
+function consultBtn(r){
+  var n=consultCount(r.consult);
+  if(n>0) return '<button class="mini con has" onclick="openConsult(\''+r.id+'\')">💬 상담 '+n+'</button>';
+  return '<button class="mini con" onclick="openConsult(\''+r.id+'\')">＋상담</button>';
+}
+var cnEditId=null;
+function openConsult(id){
+  var r=ALL.find(function(x){return x.id===id;}); if(!r)return;
+  cnEditId=id;
+  document.getElementById('cnTitle').textContent=r.name||'상담';
+  var tel=r.tel||r.tel2||"";
+  document.getElementById('cnPhone').innerHTML=(tel?'📞 '+telLink(tel):'<span style="color:var(--sub)">전화번호 없음</span>')
+    +' &nbsp;·&nbsp; '+sendChip(r.send);
+  document.getElementById('cnText').value=r.consult||"";
+  document.getElementById('mask').classList.remove('on');
+  document.getElementById('cnMask').classList.add('on');
+  setTimeout(function(){document.getElementById('cnNew').focus();},50);
+}
+function closeConsult(){ document.getElementById('cnMask').classList.remove('on'); cnEditId=null; }
+function cnStamp(){ var d=new Date(); function z(n){return(n<10?'0':'')+n;} return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+' '+z(d.getHours())+':'+z(d.getMinutes()); }
+function cnAddToday(){
+  var ta=document.getElementById('cnNew'); var txt=ta.value.trim();
+  if(!txt){ ta.focus(); return; }
+  var entry='['+cnStamp()+'] '+txt;
+  var box=document.getElementById('cnText');
+  box.value = entry + (box.value.trim()? '\n'+box.value : '');
+  ta.value='';
+  cnSave();
+}
+function cnSave(){
+  if(!cnEditId) return;
+  var id=cnEditId, r=ALL.find(function(x){return x.id===id;});
+  var base = changes[id] ? Object.assign({}, changes[id]) : {
+    status:(id.charAt(0)==='a')?'추가':'수정',
+    name:r.name,addr:r.addr,oper:r.oper,tel:r.tel,tel2:r.tel2,carN:r.carN,carT:r.carT,carDetail:r.carDetail,kind:r.kind,send:r.send
+  };
+  if(!base.status) base.status=(id.charAt(0)==='a')?'추가':'수정';
+  base.consult=document.getElementById('cnText').value.trim();
+  changes[id]=base;
+  saveCache(); pushToServer(id,base);
+  rebuild(); refresh();
 }
 var ciEditId=null;
 function openCarInfo(id){
@@ -434,6 +502,7 @@ function render(){
       '<td class="hide-sm">'+esc(r.carN)+'</td>'+
       '<td>'+carCell(r)+'</td>'+
       '<td class="act">'+
+        consultBtn(r)+
         '<button class="mini e" onclick="openForm(\''+r.id+'\')">수정</button>'+
         '<button class="mini d" onclick="delRec(\''+r.id+'\')">삭제</button>'+
       '</td></tr>';
@@ -556,8 +625,8 @@ function restore(inp){
 }
 function csvCell(s){ s=(s==null?"":String(s)); if(/[",\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
 function exportCSV(){
-  var rows=[['학원명','발송상태','시설종류','소재지','주소','운영자','전화번호','전화번호2','전화번호3','보유차량수','차량형태','차량상세']];
-  VIEW.forEach(function(r){ rows.push([r.name,r.send,r.kind,r.sojae,r.addr,r.oper,r.tel,r.tel2,r.tel3,r.carN,r.carT,r.carDetail]); });
+  var rows=[['학원명','발송상태','시설종류','소재지','주소','운영자','전화번호','전화번호2','전화번호3','보유차량수','차량형태','차량상세','상담이력']];
+  VIEW.forEach(function(r){ rows.push([r.name,r.send,r.kind,r.sojae,r.addr,r.oper,r.tel,r.tel2,r.tel3,r.carN,r.carT,r.carDetail,r.consult]); });
   var csv=rows.map(function(row){return row.map(csvCell).join(',');}).join('\r\n');
   dl('학원목록_'+stamp()+'.csv','﻿'+csv,'text/csv;charset=utf-8');
 }
@@ -616,6 +685,7 @@ function init(){
   document.getElementById('fCar').addEventListener('change',refresh);
   document.getElementById('mask').addEventListener('click',function(e){if(e.target===this)closeForm();});
   document.getElementById('ciMask').addEventListener('click',function(e){if(e.target===this)closeCarInfo();});
+  document.getElementById('cnMask').addEventListener('click',function(e){if(e.target===this)closeConsult();});
   refresh();
   loadFromServer(); // 서버에서 최신 공유 데이터 동기화
 }

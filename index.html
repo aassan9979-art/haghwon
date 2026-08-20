@@ -47,6 +47,16 @@
   .pager .pg{font-size:13px;color:var(--sub)}
   .empty{text-align:center;padding:60px 20px;color:var(--sub)}
   .badge-added{background:#ecfdf5;color:#047857;font-size:11px;border-radius:5px;padding:1px 5px;margin-left:5px}
+  .carcell{cursor:pointer;color:var(--brand);border-bottom:1px dashed #93c5fd;padding-bottom:1px}
+  .carcell:hover{color:var(--brand-d);background:#eff6ff}
+  .carcell.has{font-weight:600}
+  .carcell.empty{color:#cbd5e1;border:none}
+  .carcell.empty:hover{color:var(--brand)}
+  .ci-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line)}
+  .ci-k{font-size:12.5px;color:var(--sub);font-weight:600}
+  .ci-v{font-size:14px;color:var(--txt)}
+  .ci-veh{background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:8px 11px;margin-bottom:6px;font-size:14px;font-variant-numeric:tabular-nums}
+  .ci-none{color:var(--sub);font-size:13px;line-height:1.6;padding:6px 2px}
   /* modal */
   .mask{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
   .mask.on{display:flex}
@@ -165,9 +175,29 @@
       <div class="field"><label>보유차량수</label><input id="mCarN" class="inp" placeholder="예: 2"></div>
       <div class="field"><label>차량형태</label><input id="mCarT" class="inp" placeholder="예: 스타렉스 / 없음"></div>
     </div>
+    <div class="field">
+      <label>차량상세 — 차명(차량번호)(승차정원)</label>
+      <input id="mCarDetail" class="inp" placeholder="예: 스타렉스(12가3456)(12인승), 카운티(34나5678)(25인승)">
+      <div class="hint">여러 대면 쉼표(,)로 구분해 적으세요. 목록에서 <b>차량형태</b>를 클릭하면 이 내용이 뜹니다.</div>
+    </div>
     <div class="modal-act">
       <button class="btn btn-g" onclick="closeForm()">취소</button>
       <button class="btn btn-p" onclick="saveForm()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 차량상세 팝업 -->
+<div class="mask" id="ciMask">
+  <div class="modal" style="max-width:420px">
+    <h2 id="ciTitle">차량 정보</h2>
+    <div class="ci-row"><span class="ci-k">차량형태</span><span id="ciType" class="ci-v"></span></div>
+    <div class="ci-row"><span class="ci-k">보유차량수</span><span id="ciCount" class="ci-v"></span></div>
+    <div class="ci-k" style="margin:12px 0 6px">차량상세 — 차명(차량번호)(승차정원)</div>
+    <div id="ciDetail"></div>
+    <div class="modal-act">
+      <button class="btn btn-g" onclick="closeCarInfo()">닫기</button>
+      <button class="btn btn-p" onclick="ciEdit()">수정</button>
     </div>
   </div>
 </div>
@@ -227,10 +257,10 @@ function saveCache(){ try{localStorage.setItem(CKEY,JSON.stringify(changes));loc
 
 function baseRec(i){
   var r=BASE[i];
-  return {id:"b"+i,name:r[0]||"",addr:r[1]||"",oper:r[2]||"",tel:r[3]||"",tel2:r[4]||"",tel3:r[5]||"",carN:"",carT:r[6]||""};
+  return {id:"b"+i,name:r[0]||"",addr:r[1]||"",oper:r[2]||"",tel:r[3]||"",tel2:r[4]||"",tel3:r[5]||"",carN:"",carT:r[6]||"",carDetail:""};
 }
 function recFromChange(id,c){
-  return {id:id,name:c.name||"",addr:c.addr||"",oper:c.oper||"",tel:c.tel||"",tel2:c.tel2||"",tel3:"",carN:(c.carN==null?"":String(c.carN)),carT:c.carT||""};
+  return {id:id,name:c.name||"",addr:c.addr||"",oper:c.oper||"",tel:c.tel||"",tel2:c.tel2||"",tel3:"",carN:(c.carN==null?"":String(c.carN)),carT:c.carT||"",carDetail:c.carDetail||""};
 }
 function buildRecords(){
   var out=[];
@@ -309,6 +339,29 @@ function filterView(){
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 function telLink(t){ if(!t)return""; var d=onlyDigits(t); return '<a href="tel:'+d+'">'+esc(t)+'</a>'; }
 
+/* ===== 차량형태 셀(클릭 → 차량상세 팝업) ===== */
+function carCell(r){
+  var t=(r.carT||"").trim(), d=(r.carDetail||"").trim();
+  var has=d!=="";
+  var text=t||(has?"차량 있음":"");
+  if(!text) return '<span class="carcell empty" title="클릭해 차량정보 입력" onclick="openCarInfo(\''+r.id+'\')">–</span>';
+  return '<span class="carcell'+(has?' has':'')+'" title="클릭해 차량상세 보기" onclick="openCarInfo(\''+r.id+'\')">'+esc(text)+(has?' 🔎':'')+'</span>';
+}
+var ciEditId=null;
+function openCarInfo(id){
+  var r=ALL.find(function(x){return x.id===id;}); if(!r)return;
+  ciEditId=id;
+  document.getElementById('ciTitle').textContent=r.name||'차량 정보';
+  document.getElementById('ciType').textContent=r.carT||'(미지정)';
+  document.getElementById('ciCount').textContent=(r.carN?esc(r.carN)+'대':'(미입력)');
+  var d=(r.carDetail||"").trim(), body=document.getElementById('ciDetail');
+  if(d){ body.innerHTML=d.split(/\s*,\s*/).filter(Boolean).map(function(x){return '<div class="ci-veh">🚐 '+esc(x)+'</div>';}).join(''); }
+  else { body.innerHTML='<div class="ci-none">등록된 차량상세가 없습니다.<br>아래 <b>수정</b>에서 차명(차량번호)(승차정원)을 입력하세요.</div>'; }
+  document.getElementById('ciMask').classList.add('on');
+}
+function closeCarInfo(){ document.getElementById('ciMask').classList.remove('on'); }
+function ciEdit(){ var id=ciEditId; closeCarInfo(); openForm(id); }
+
 function render(){
   var tb=document.getElementById('tbody');
   var total=VIEW.length;
@@ -328,7 +381,7 @@ function render(){
       '<td class="hide-sm">'+esc(r.oper)+'</td>'+
       '<td class="tel">'+tels+'</td>'+
       '<td class="hide-sm">'+esc(r.carN)+'</td>'+
-      '<td>'+esc(r.carT)+'</td>'+
+      '<td>'+carCell(r)+'</td>'+
       '<td class="act">'+
         '<button class="mini e" onclick="openForm(\''+r.id+'\')">수정</button>'+
         '<button class="mini d" onclick="delRec(\''+r.id+'\')">삭제</button>'+
@@ -379,9 +432,9 @@ var editingId=null;
 function openForm(id){
   editingId=id||null;
   document.getElementById('mTitle').textContent=id?'학원 수정':'학원 추가';
-  var r=id?ALL.find(function(x){return x.id===id;}):{name:"",addr:"",oper:"",tel:"",tel2:"",carN:"",carT:""};
+  var r=id?ALL.find(function(x){return x.id===id;}):{name:"",addr:"",oper:"",tel:"",tel2:"",carN:"",carT:"",carDetail:""};
   mName.value=r.name||""; mAddr.value=r.addr||""; mOper.value=r.oper||"";
-  mTel.value=r.tel||""; mTel2.value=r.tel2||""; mCarN.value=r.carN||""; mCarT.value=r.carT||"";
+  mTel.value=r.tel||""; mTel2.value=r.tel2||""; mCarN.value=r.carN||""; mCarT.value=r.carT||""; mCarDetail.value=r.carDetail||"";
   previewSojae();
   document.getElementById('mask').classList.add('on');
 }
@@ -391,7 +444,7 @@ function saveForm(){
   var name=mName.value.trim(), addr=mAddr.value.trim();
   if(!name){alert('학원명을 입력하세요.');return;}
   if(!addr){alert('주소를 입력하세요.');return;}
-  var data={name:name,addr:addr,oper:mOper.value.trim(),tel:mTel.value.trim(),tel2:mTel2.value.trim(),carN:mCarN.value.trim(),carT:mCarT.value.trim()};
+  var data={name:name,addr:addr,oper:mOper.value.trim(),tel:mTel.value.trim(),tel2:mTel2.value.trim(),carN:mCarN.value.trim(),carT:mCarT.value.trim(),carDetail:mCarDetail.value.trim()};
   var id, status;
   if(editingId){ id=editingId; status=(id.charAt(0)==='a')?'추가':'수정'; }
   else { id='a'+Date.now()+Math.floor(Math.random()*1000); status='추가'; }
@@ -403,7 +456,7 @@ function saveForm(){
 function delRec(id){
   var r=ALL.find(function(x){return x.id===id;});
   if(!confirm('삭제하시겠습니까?'+(SHARED?' (모든 기기에서 삭제됩니다)':'')+'\n\n'+(r?r.name:'')+'\n'+(r?r.addr:''))) return;
-  var snap={status:'삭제',name:r?r.name:'',addr:r?r.addr:'',oper:r?r.oper:'',tel:r?r.tel:'',tel2:r?r.tel2:'',carN:r?r.carN:'',carT:r?r.carT:''};
+  var snap={status:'삭제',name:r?r.name:'',addr:r?r.addr:'',oper:r?r.oper:'',tel:r?r.tel:'',tel2:r?r.tel2:'',carN:r?r.carN:'',carT:r?r.carT:'',carDetail:r?r.carDetail:''};
   changes[id]=snap;
   saveCache(); pushToServer(id,snap);
   rebuild(); refresh();
@@ -443,8 +496,8 @@ function restore(inp){
 }
 function csvCell(s){ s=(s==null?"":String(s)); if(/[",\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
 function exportCSV(){
-  var rows=[['학원명','소재지','주소','운영자','전화번호','전화번호2','전화번호3','보유차량수','차량형태']];
-  VIEW.forEach(function(r){ rows.push([r.name,r.sojae,r.addr,r.oper,r.tel,r.tel2,r.tel3,r.carN,r.carT]); });
+  var rows=[['학원명','소재지','주소','운영자','전화번호','전화번호2','전화번호3','보유차량수','차량형태','차량상세']];
+  VIEW.forEach(function(r){ rows.push([r.name,r.sojae,r.addr,r.oper,r.tel,r.tel2,r.tel3,r.carN,r.carT,r.carDetail]); });
   var csv=rows.map(function(row){return row.map(csvCell).join(',');}).join('\r\n');
   dl('학원목록_'+stamp()+'.csv','﻿'+csv,'text/csv;charset=utf-8');
 }
@@ -476,7 +529,7 @@ function loadFromServer(){
   setSync('loading');
   fetch(API_URL,{method:'GET'}).then(function(r){return r.json();}).then(function(res){
     if(res&&res.ok&&res.rows){
-      var srv={}; res.rows.forEach(function(row){ srv[row.id]={status:row.status,name:row.name,addr:row.addr,oper:row.oper,tel:row.tel,tel2:row.tel2,carN:row.carN,carT:row.carT}; });
+      var srv={}; res.rows.forEach(function(row){ srv[row.id]={status:row.status,name:row.name,addr:row.addr,oper:row.oper,tel:row.tel,tel2:row.tel2,carN:row.carN,carT:row.carT,carDetail:row.carDetail}; });
       pending.forEach(function(p){ srv[p.id]=p; }); // 미전송 로컬 변경은 유지
       changes=srv; saveCache(); setSync(pending.length?'err':'ok');
     } else setSync('offline');
@@ -500,6 +553,7 @@ function init(){
   document.getElementById('fGu').addEventListener('change',refresh);
   document.getElementById('fCar').addEventListener('change',refresh);
   document.getElementById('mask').addEventListener('click',function(e){if(e.target===this)closeForm();});
+  document.getElementById('ciMask').addEventListener('click',function(e){if(e.target===this)closeCarInfo();});
   refresh();
   loadFromServer(); // 서버에서 최신 공유 데이터 동기화
 }

@@ -87,8 +87,11 @@
   .sbtn{cursor:pointer;border-radius:20px;padding:4px 12px;font-size:13px;font-weight:700;border:1px solid transparent}
   .sbtn.sent{background:#dcfce7;color:#15803d}
   .sbtn.unsent{background:#f1f5f9;color:#64748b}
+  .sbtn.con{background:#fff7ed;color:#c2410c}
+  .sbtn.ncon{background:#f1f5f9;color:#64748b}
   .sbtn.on{outline:2px solid #16a34a;outline-offset:1px}
-  .sbtn.unsent.on{outline-color:#64748b}
+  .sbtn.unsent.on,.sbtn.ncon.on{outline-color:#64748b}
+  .sbtn.con.on{outline-color:#ea580c}
   .dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:7px}
   .rg{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;cursor:pointer;transition:.12s}
   .rg:hover{background:#eef2ff;border-color:#c7d2fe}
@@ -121,6 +124,7 @@
   <div class="toolbar">
     <input id="q" class="inp" placeholder="🔍 학원명·주소·운영자·전화번호 검색">
     <select id="fSend" class="inp"><option value="">발송 전체</option></select>
+    <select id="fConsult" class="inp"><option value="">상담 전체</option></select>
     <select id="fKind" class="inp"><option value="">전체 종류</option></select>
     <select id="fSido" class="inp"><option value="">전체 시/도</option></select>
     <select id="fGu" class="inp"><option value="">전체 시/군/구</option></select>
@@ -357,6 +361,14 @@ function fillSend(){
   Object.keys(c).forEach(function(s){ if(s!=='1차발송'&&s!=='미발송'&&c[s]){ var o=document.createElement('option'); o.value=s; o.textContent=s+' ('+c[s].toLocaleString()+')'; sel.appendChild(o); } });
   sel.value=cur;
 }
+function fillConsult(){
+  var y=0; ALL.forEach(function(r){ if(consultCount(r.consult)>0) y++; });
+  var sel=document.getElementById('fConsult'), cur=sel.value;
+  sel.innerHTML='<option value="">상담 전체 ('+ALL.length.toLocaleString()+')</option>'+
+    '<option value="y">상담함 ('+y.toLocaleString()+')</option>'+
+    '<option value="n">미상담 ('+(ALL.length-y).toLocaleString()+')</option>';
+  sel.value=cur;
+}
 var KIND_ORDER=['학원','교습소','유치원','초등학교','중학교','고등학교','특수학교','각종학교'];
 function fillKind(){
   var counts={}; ALL.forEach(function(r){ if(r.kind) counts[r.kind]=(counts[r.kind]||0)+1; });
@@ -388,8 +400,11 @@ function filterView(){
   var car=document.getElementById('fCar').value;
   var kind=document.getElementById('fKind').value;
   var send=document.getElementById('fSend').value;
+  var con=document.getElementById('fConsult').value;
   VIEW=ALL.filter(function(r){
     if(send && (r.send||'미발송')!==send) return false;
+    if(con==='y' && consultCount(r.consult)===0) return false;
+    if(con==='n' && consultCount(r.consult)>0) return false;
     if(kind && r.kind!==kind) return false;
     if(sido && r.sido!==sido) return false;
     if(gu && r.gu!==gu) return false;
@@ -462,7 +477,7 @@ function cnSave(){
   base.consult=document.getElementById('cnText').value.trim();
   changes[id]=base;
   saveCache(); pushToServer(id,base);
-  rebuild(); refresh();
+  rebuild(); fillConsult(); refresh();
 }
 var ciEditId=null;
 function openCarInfo(id){
@@ -528,13 +543,15 @@ function renderStats(){
   Object.keys(counts).forEach(function(s){ if(order.indexOf(s)<0) order.push(s); }); // 기타 등 뒤로
   var cur=document.getElementById('fSido').value;
   var total=ALL.length;
-  var sent=0; ALL.forEach(function(r){ if((r.send||'미발송')==='1차발송') sent++; });
-  var curSend=document.getElementById('fSend').value;
+  var sent=0, cons=0; ALL.forEach(function(r){ if((r.send||'미발송')==='1차발송') sent++; if(consultCount(r.consult)>0) cons++; });
+  var curSend=document.getElementById('fSend').value, curCon=document.getElementById('fConsult').value;
   var html='<div class="dash-top"><span class="t">📊 전국 통학차량 시설 현황</span>'+
     '<span class="total">'+total.toLocaleString()+'<small>개</small></span>'+
     '<span class="t" style="font-weight:400;color:var(--sub)">· '+order.length+'개 지역</span>'+
     '<span class="sbtn sent'+(curSend==='1차발송'?' on':'')+'" onclick="pickSend(\'1차발송\')">1차발송 '+sent.toLocaleString()+'</span>'+
-    '<span class="sbtn unsent'+(curSend==='미발송'?' on':'')+'" onclick="pickSend(\'미발송\')">미발송 '+(total-sent).toLocaleString()+'</span></div>';
+    '<span class="sbtn unsent'+(curSend==='미발송'?' on':'')+'" onclick="pickSend(\'미발송\')">미발송 '+(total-sent).toLocaleString()+'</span>'+
+    '<span class="sbtn con'+(curCon==='y'?' on':'')+'" onclick="pickConsult(\'y\')">💬 상담함 '+cons.toLocaleString()+'</span>'+
+    '<span class="sbtn ncon'+(curCon==='n'?' on':'')+'" onclick="pickConsult(\'n\')">미상담 '+(total-cons).toLocaleString()+'</span></div>';
   html+='<div class="dash-grid">';
   order.forEach(function(s){
     html+='<div class="rg'+(cur===s?' on':'')+'" onclick="pickSido(\''+s+'\')">'+
@@ -550,6 +567,11 @@ function pickSido(s){
 }
 function pickSend(s){
   var sel=document.getElementById('fSend');
+  sel.value=(sel.value===s?'':s);
+  refresh(); window.scrollTo(0,0);
+}
+function pickConsult(s){
+  var sel=document.getElementById('fConsult');
   sel.value=(sel.value===s?'':s);
   refresh(); window.scrollTo(0,0);
 }
@@ -588,7 +610,7 @@ function delRec(id){
   var snap={status:'삭제',name:r?r.name:'',addr:r?r.addr:'',oper:r?r.oper:'',tel:r?r.tel:'',tel2:r?r.tel2:'',carN:r?r.carN:'',carT:r?r.carT:'',carDetail:r?r.carDetail:'',kind:r?r.kind:'',send:r?r.send:''};
   changes[id]=snap;
   saveCache(); pushToServer(id,snap);
-  rebuild(); fillKind(); fillSend(); refresh();
+  rebuild(); fillKind(); fillSend(); fillConsult(); refresh();
 }
 function resetAll(){
   if(SHARED){
@@ -668,17 +690,18 @@ function loadFromServer(){
 
 /* ===== 초기화 ===== */
 function rebuild(){ ALL=buildRecords(); computeDerived(); }
-function rebuildAll(){ rebuild(); buildRegionIndex(); rebuildSido(); fillKind(); fillSend(); refresh(); }
+function rebuildAll(){ rebuild(); buildRegionIndex(); rebuildSido(); fillKind(); fillSend(); fillConsult(); refresh(); }
 function rebuildSido(){
   var sel=document.getElementById('fSido'), cur=sel.value;
   sel.innerHTML='<option value="">전체 시/도</option>'; fillSido(); sel.value=cur;
 }
 function init(){
   loadCache();
-  rebuild(); buildRegionIndex(); fillSido(); fillGu(); fillKind(); fillSend();
+  rebuild(); buildRegionIndex(); fillSido(); fillGu(); fillKind(); fillSend(); fillConsult();
   applySharedUI();
   document.getElementById('q').addEventListener('input',debounce(refresh,200));
   document.getElementById('fSend').addEventListener('change',refresh);
+  document.getElementById('fConsult').addEventListener('change',refresh);
   document.getElementById('fKind').addEventListener('change',refresh);
   document.getElementById('fSido').addEventListener('change',function(){fillGu();refresh();});
   document.getElementById('fGu').addEventListener('change',refresh);

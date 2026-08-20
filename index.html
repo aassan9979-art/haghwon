@@ -89,9 +89,12 @@
   .sbtn.unsent{background:#f1f5f9;color:#64748b}
   .sbtn.con{background:#fff7ed;color:#c2410c}
   .sbtn.ncon{background:#f1f5f9;color:#64748b}
+  .sbtn.sncon{background:#ffedd5;color:#9a3412}
+  .sbtn.nncon{background:#f1f5f9;color:#64748b}
   .sbtn.on{outline:2px solid #16a34a;outline-offset:1px}
-  .sbtn.unsent.on,.sbtn.ncon.on{outline-color:#64748b}
-  .sbtn.con.on{outline-color:#ea580c}
+  .sbtn.unsent.on,.sbtn.ncon.on,.sbtn.nncon.on{outline-color:#64748b}
+  .sbtn.con.on,.sbtn.sncon.on{outline-color:#ea580c}
+  .sbtn.sub{font-size:12px;padding:3px 10px}
   .dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:7px}
   .rg{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;cursor:pointer;transition:.12s}
   .rg:hover{background:#eef2ff;border-color:#c7d2fe}
@@ -362,11 +365,18 @@ function fillSend(){
   sel.value=cur;
 }
 function fillConsult(){
-  var y=0; ALL.forEach(function(r){ if(consultCount(r.consult)>0) y++; });
+  var y=0, ns=0, nn=0;
+  ALL.forEach(function(r){
+    if(consultCount(r.consult)>0){ y++; }
+    else if((r.send||'미발송')==='1차발송'){ ns++; }
+    else { nn++; }
+  });
   var sel=document.getElementById('fConsult'), cur=sel.value;
   sel.innerHTML='<option value="">상담 전체 ('+ALL.length.toLocaleString()+')</option>'+
     '<option value="y">상담함 ('+y.toLocaleString()+')</option>'+
-    '<option value="n">미상담 ('+(ALL.length-y).toLocaleString()+')</option>';
+    '<option value="n">미상담 ('+(ns+nn).toLocaleString()+')</option>'+
+    '<option value="ns">└ 발송미상담 ('+ns.toLocaleString()+')</option>'+
+    '<option value="nn">└ 그냥 미상담 ('+nn.toLocaleString()+')</option>';
   sel.value=cur;
 }
 var KIND_ORDER=['학원','교습소','유치원','초등학교','중학교','고등학교','특수학교','각종학교'];
@@ -405,6 +415,8 @@ function filterView(){
     if(send && (r.send||'미발송')!==send) return false;
     if(con==='y' && consultCount(r.consult)===0) return false;
     if(con==='n' && consultCount(r.consult)>0) return false;
+    if(con==='ns' && !(consultCount(r.consult)===0 && (r.send||'미발송')==='1차발송')) return false;
+    if(con==='nn' && !(consultCount(r.consult)===0 && (r.send||'미발송')!=='1차발송')) return false;
     if(kind && r.kind!==kind) return false;
     if(sido && r.sido!==sido) return false;
     if(gu && r.gu!==gu) return false;
@@ -543,7 +555,13 @@ function renderStats(){
   Object.keys(counts).forEach(function(s){ if(order.indexOf(s)<0) order.push(s); }); // 기타 등 뒤로
   var cur=document.getElementById('fSido').value;
   var total=ALL.length;
-  var sent=0, cons=0; ALL.forEach(function(r){ if((r.send||'미발송')==='1차발송') sent++; if(consultCount(r.consult)>0) cons++; });
+  var sent=0, cons=0, sncon=0, nncon=0;
+  ALL.forEach(function(r){
+    var isSent=(r.send||'미발송')==='1차발송';
+    if(isSent) sent++;
+    if(consultCount(r.consult)>0){ cons++; }
+    else if(isSent){ sncon++; } else { nncon++; }
+  });
   var curSend=document.getElementById('fSend').value, curCon=document.getElementById('fConsult').value;
   var html='<div class="dash-top"><span class="t">📊 전국 통학차량 시설 현황</span>'+
     '<span class="total">'+total.toLocaleString()+'<small>개</small></span>'+
@@ -551,7 +569,9 @@ function renderStats(){
     '<span class="sbtn sent'+(curSend==='1차발송'?' on':'')+'" onclick="pickSend(\'1차발송\')">1차발송 '+sent.toLocaleString()+'</span>'+
     '<span class="sbtn unsent'+(curSend==='미발송'?' on':'')+'" onclick="pickSend(\'미발송\')">미발송 '+(total-sent).toLocaleString()+'</span>'+
     '<span class="sbtn con'+(curCon==='y'?' on':'')+'" onclick="pickConsult(\'y\')">💬 상담함 '+cons.toLocaleString()+'</span>'+
-    '<span class="sbtn ncon'+(curCon==='n'?' on':'')+'" onclick="pickConsult(\'n\')">미상담 '+(total-cons).toLocaleString()+'</span></div>';
+    '<span class="sbtn ncon'+(curCon==='n'?' on':'')+'" onclick="pickConsult(\'n\')">미상담 '+(total-cons).toLocaleString()+'</span>'+
+    '<span class="sbtn sncon sub'+(curCon==='ns'?' on':'')+'" onclick="pickConsult(\'ns\')">📮 발송미상담 '+sncon.toLocaleString()+'</span>'+
+    '<span class="sbtn nncon sub'+(curCon==='nn'?' on':'')+'" onclick="pickConsult(\'nn\')">그냥 미상담 '+nncon.toLocaleString()+'</span></div>';
   html+='<div class="dash-grid">';
   order.forEach(function(s){
     html+='<div class="rg'+(cur===s?' on':'')+'" onclick="pickSido(\''+s+'\')">'+

@@ -60,6 +60,8 @@
   .row2>div{flex:1}
   .modal-act{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
   .notice{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-bottom:12px;line-height:1.5}
+  .notice.shared{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+  .sync{font-size:12.5px;font-weight:600;margin-left:4px;align-self:center}
   /* 현황판 */
   .dash{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
   .dash-top{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;flex-wrap:wrap}
@@ -87,7 +89,7 @@
 </header>
 
 <div class="wrap">
-  <div class="notice">
+  <div class="notice" id="notice">
     ⚠️ 추가·수정·삭제한 내용은 <b>이 브라우저에만</b> 저장됩니다(다른 기기와 공유 안 됨).
     중요한 변경은 <b>[백업(내보내기)]</b>로 파일 저장을 권장합니다. 원본 데이터는 항상 유지됩니다.
   </div>
@@ -107,11 +109,14 @@
     <button class="btn btn-p" onclick="openForm()">+ 학원 추가</button>
   </div>
   <div class="toolbar" style="margin-top:-4px">
+    <button class="btn btn-g" onclick="loadFromServer()">🔄 새로고침</button>
     <button class="btn btn-g" onclick="exportCSV()">⬇ 엑셀(CSV) 내보내기</button>
     <button class="btn btn-g" onclick="backup()">💾 백업(내보내기)</button>
     <button class="btn btn-g" onclick="document.getElementById('restoreFile').click()">↩ 백업 복원</button>
     <input type="file" id="restoreFile" accept=".json" style="display:none" onchange="restore(this)">
-    <button class="btn btn-d" onclick="resetAll()">변경 초기화</button>
+    <button class="btn btn-d" id="btnReset" onclick="resetAll()">변경 초기화</button>
+    <span id="sync" class="sync"></span>
+    <button id="pendCnt" class="btn btn-d" style="display:none" onclick="retryPending()"></button>
   </div>
 
   <div class="count" id="count"></div>
@@ -200,35 +205,45 @@ function deriveSojae(addr){
   return {sido:sido,gu:gu,label:label};
 }
 
-/* ===== 레코드 모델 ===== */
-// BASE row = [name, addr, oper, tel, tel2, tel3, carType]
-var OKEY="haghwon_overlay_v1";
-var overlay={edits:{},deletes:[],adds:[],seq:1};
-function loadOverlay(){ try{var o=JSON.parse(localStorage.getItem(OKEY)); if(o){overlay=o; overlay.edits=overlay.edits||{}; overlay.deletes=overlay.deletes||[]; overlay.adds=overlay.adds||[]; overlay.seq=overlay.seq||1;}}catch(e){} }
-function saveOverlay(){ try{localStorage.setItem(OKEY,JSON.stringify(overlay));}catch(e){alert("저장 공간이 부족합니다. 오래된 변경을 정리하거나 백업 후 초기화하세요.");} }
+/* ===== 설정: 구글시트 공유 =====
+   구글 Apps Script 웹앱을 배포한 뒤, 아래 API_URL 에 그 주소(.../exec)를 넣으면
+   모든 기기·브라우저가 같은 변경 내용을 공유합니다. 비워두면 이 브라우저에만 저장됩니다. */
+var API_URL="__API_URL__";
+try{ var _u=localStorage.getItem('haghwon_api_url'); if(_u) API_URL=_u; }catch(e){}
+var SHARED=/^https:\/\//.test(API_URL);
+
+/* ===== 레코드 모델 =====
+   BASE row = [name, addr, oper, tel, tel2, tel3, carType]
+   changes: id -> {status:'수정|추가|삭제', name,addr,oper,tel,tel2,carN,carT}
+   (구글시트 각 행 = 변경분 1건. 원본 24,116건은 data.js 그대로 유지) */
+var CKEY="haghwon_changes_v2", PKEY="haghwon_pending_v2";
+var changes={};   // 공유 변경분(서버=원본, 로컬=캐시)
+var pending=[];   // 서버 전송 실패분(오프라인 대기)
+function loadCache(){
+  try{changes=JSON.parse(localStorage.getItem(CKEY))||{};}catch(e){changes={};}
+  try{pending=JSON.parse(localStorage.getItem(PKEY))||[];}catch(e){pending=[];}
+}
+function saveCache(){ try{localStorage.setItem(CKEY,JSON.stringify(changes));localStorage.setItem(PKEY,JSON.stringify(pending));}catch(e){} }
 
 function baseRec(i){
   var r=BASE[i];
   return {id:"b"+i,name:r[0]||"",addr:r[1]||"",oper:r[2]||"",tel:r[3]||"",tel2:r[4]||"",tel3:r[5]||"",carN:"",carT:r[6]||""};
 }
-function applyEdit(rec){
-  var e=overlay.edits[rec.id];
-  if(e){ for(var k in e){ rec[k]=e[k]; } }
-  return rec;
+function recFromChange(id,c){
+  return {id:id,name:c.name||"",addr:c.addr||"",oper:c.oper||"",tel:c.tel||"",tel2:c.tel2||"",tel3:"",carN:(c.carN==null?"":String(c.carN)),carT:c.carT||""};
 }
 function buildRecords(){
   var out=[];
-  var del={}; overlay.deletes.forEach(function(id){del[id]=1;});
   for(var i=0;i<BASE.length;i++){
-    var id="b"+i;
-    if(del[id]) continue;
-    out.push(applyEdit(baseRec(i)));
+    var id="b"+i, c=changes[id];
+    if(c){ if(c.status==='삭제') continue; out.push(recFromChange(id,c)); }
+    else out.push(baseRec(i));
   }
-  overlay.adds.forEach(function(a){
-    if(del[a.id]) return;
-    var rec={id:a.id,name:a.name||"",addr:a.addr||"",oper:a.oper||"",tel:a.tel||"",tel2:a.tel2||"",tel3:a.tel3||"",carN:a.carN||"",carT:a.carT||""};
-    out.push(applyEdit(rec));
-  });
+  for(var k in changes){
+    if(k.charAt(0)!=='a') continue;
+    if(changes[k].status==='삭제') continue;
+    out.push(recFromChange(k,changes[k]));
+  }
   return out;
 }
 
@@ -376,30 +391,30 @@ function saveForm(){
   var name=mName.value.trim(), addr=mAddr.value.trim();
   if(!name){alert('학원명을 입력하세요.');return;}
   if(!addr){alert('주소를 입력하세요.');return;}
-  var data={name:name,addr:addr,oper:mOper.value.trim(),tel:mTel.value.trim(),tel2:mTel2.value.trim(),tel3:"",carN:mCarN.value.trim(),carT:mCarT.value.trim()};
-  if(editingId){
-    if(editingId[0]==="a"){
-      var a=overlay.adds.find(function(x){return x.id===editingId;});
-      if(a){Object.assign(a,data);}
-    } else {
-      overlay.edits[editingId]=data;
-    }
-  } else {
-    var id="a"+(overlay.seq++);
-    data.id=id; overlay.adds.push(data);
-  }
-  saveOverlay(); rebuild(); closeForm(); refresh();
+  var data={name:name,addr:addr,oper:mOper.value.trim(),tel:mTel.value.trim(),tel2:mTel2.value.trim(),carN:mCarN.value.trim(),carT:mCarT.value.trim()};
+  var id, status;
+  if(editingId){ id=editingId; status=(id.charAt(0)==='a')?'추가':'수정'; }
+  else { id='a'+Date.now()+Math.floor(Math.random()*1000); status='추가'; }
+  data.status=status;
+  changes[id]=data;
+  saveCache(); pushToServer(id,data);
+  rebuild(); closeForm(); refresh();
 }
 function delRec(id){
   var r=ALL.find(function(x){return x.id===id;});
-  if(!confirm('삭제하시겠습니까?\n\n'+(r?r.name:'')+'\n'+(r?r.addr:''))) return;
-  if(id[0]==="a"){ overlay.adds=overlay.adds.filter(function(x){return x.id!==id;}); }
-  else { if(overlay.deletes.indexOf(id)<0)overlay.deletes.push(id); delete overlay.edits[id]; }
-  saveOverlay(); rebuild(); refresh();
+  if(!confirm('삭제하시겠습니까?'+(SHARED?' (모든 기기에서 삭제됩니다)':'')+'\n\n'+(r?r.name:'')+'\n'+(r?r.addr:''))) return;
+  var snap={status:'삭제',name:r?r.name:'',addr:r?r.addr:'',oper:r?r.oper:'',tel:r?r.tel:'',tel2:r?r.tel2:'',carN:r?r.carN:'',carT:r?r.carT:''};
+  changes[id]=snap;
+  saveCache(); pushToServer(id,snap);
+  rebuild(); refresh();
 }
 function resetAll(){
+  if(SHARED){
+    if(!confirm('이 기기의 임시 캐시를 비우고 구글시트에서 다시 불러옵니다.\n(공유 데이터는 삭제되지 않습니다)')) return;
+    changes={}; pending=[]; saveCache(); loadFromServer(); return;
+  }
   if(!confirm('추가·수정·삭제한 모든 변경을 지우고 원본 상태로 되돌립니다.\n계속할까요?')) return;
-  overlay={edits:{},deletes:[],adds:[],seq:1}; saveOverlay(); rebuild(); refresh();
+  changes={}; saveCache(); rebuildAll();
 }
 
 /* ===== 백업/복원/내보내기 ===== */
@@ -408,11 +423,22 @@ function dl(name,text,type){
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
   setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
 }
-function backup(){ dl('학원관리_백업_'+stamp()+'.json',JSON.stringify(overlay),'application/json'); }
+function backup(){ dl('학원관리_변경백업_'+stamp()+'.json',JSON.stringify(changes),'application/json'); }
 function restore(inp){
   var f=inp.files[0]; if(!f)return;
   var rd=new FileReader();
-  rd.onload=function(){ try{var o=JSON.parse(rd.result); overlay=o; overlay.edits=overlay.edits||{};overlay.deletes=overlay.deletes||[];overlay.adds=overlay.adds||[];overlay.seq=overlay.seq||1; saveOverlay(); rebuild(); refresh(); alert('복원되었습니다.'); }catch(e){alert('올바른 백업 파일이 아닙니다.');} inp.value=''; };
+  rd.onload=function(){ try{
+      var o=JSON.parse(rd.result);
+      if(o && (o.edits||o.adds||o.deletes)){ // 예전(v1) 백업 형식 자동 변환
+        var nc={}; (o.adds||[]).forEach(function(a){nc[a.id]={status:'추가',name:a.name,addr:a.addr,oper:a.oper,tel:a.tel,tel2:a.tel2,carN:a.carN,carT:a.carT};});
+        for(var eid in (o.edits||{})){var e=o.edits[eid];nc[eid]={status:'수정',name:e.name,addr:e.addr,oper:e.oper,tel:e.tel,tel2:e.tel2,carN:e.carN,carT:e.carT};}
+        (o.deletes||[]).forEach(function(id){nc[id]={status:'삭제'};});
+        o=nc;
+      }
+      changes=o||{}; saveCache();
+      if(SHARED){ for(var id in changes){ pushToServer(id,changes[id]); } }
+      rebuildAll(); alert('복원되었습니다.'+(SHARED?' 구글시트로도 업로드했습니다.':''));
+    }catch(e){alert('올바른 백업 파일이 아닙니다.');} inp.value=''; };
   rd.readAsText(f);
 }
 function csvCell(s){ s=(s==null?"":String(s)); if(/[",\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
@@ -424,18 +450,63 @@ function exportCSV(){
 }
 function stamp(){var d=new Date();function z(n){return(n<10?'0':'')+n;}return d.getFullYear()+z(d.getMonth()+1)+z(d.getDate())+'_'+z(d.getHours())+z(d.getMinutes());}
 
+/* ===== 구글시트 서버 동기화 ===== */
+function setSync(state){
+  var el=document.getElementById('sync'); if(!el) return;
+  var map={loading:['⏳ 불러오는 중…','#6b7280'],saving:['⏫ 저장 중…','#2563eb'],
+    ok:['✅ 구글시트 동기화됨','#059669'],err:['⚠️ 저장 실패(대기)','#b45309'],
+    offline:['📴 오프라인(로컬 표시)','#b45309'],local:['💻 이 브라우저에만 저장','#6b7280']};
+  var m=map[state]||map.ok; el.textContent=m[0]; el.style.color=m[1];
+  var pc=document.getElementById('pendCnt');
+  if(pc){ if(pending.length){pc.style.display='';pc.textContent='미전송 '+pending.length+'건 재전송';} else pc.style.display='none'; }
+}
+function postOne(payload){
+  setSync('saving');
+  fetch(API_URL,{method:'POST',body:JSON.stringify(payload)})
+    .then(function(r){return r.json();})
+    .then(function(res){ if(res&&res.ok){ pending=pending.filter(function(x){return x.id!==payload.id;}); saveCache(); setSync('ok'); }
+                         else { queuePending(payload); setSync('err'); } })
+    .catch(function(){ queuePending(payload); setSync('err'); });
+}
+function pushToServer(id,data){ if(!SHARED){ setSync('local'); return; } postOne(Object.assign({id:id},data)); }
+function queuePending(p){ pending=pending.filter(function(x){return x.id!==p.id;}); pending.push(p); saveCache(); setSync('err'); }
+function retryPending(){ if(!SHARED||!pending.length)return; var q=pending.slice(); pending=[]; saveCache(); q.forEach(postOne); }
+function loadFromServer(){
+  if(!SHARED){ setSync('local'); rebuildAll(); return; }
+  setSync('loading');
+  fetch(API_URL,{method:'GET'}).then(function(r){return r.json();}).then(function(res){
+    if(res&&res.ok&&res.rows){
+      var srv={}; res.rows.forEach(function(row){ srv[row.id]={status:row.status,name:row.name,addr:row.addr,oper:row.oper,tel:row.tel,tel2:row.tel2,carN:row.carN,carT:row.carT}; });
+      pending.forEach(function(p){ srv[p.id]=p; }); // 미전송 로컬 변경은 유지
+      changes=srv; saveCache(); setSync(pending.length?'err':'ok');
+    } else setSync('offline');
+    rebuildAll();
+  }).catch(function(){ setSync('offline'); rebuildAll(); });
+}
+
 /* ===== 초기화 ===== */
 function rebuild(){ ALL=buildRecords(); computeDerived(); }
+function rebuildAll(){ rebuild(); buildRegionIndex(); rebuildSido(); refresh(); }
+function rebuildSido(){
+  var sel=document.getElementById('fSido'), cur=sel.value;
+  sel.innerHTML='<option value="">전체 시/도</option>'; fillSido(); sel.value=cur;
+}
 function init(){
-  loadOverlay();
-  rebuild();
-  buildRegionIndex(); fillSido(); fillGu();
+  loadCache();
+  rebuild(); buildRegionIndex(); fillSido(); fillGu();
+  applySharedUI();
   document.getElementById('q').addEventListener('input',debounce(refresh,200));
   document.getElementById('fSido').addEventListener('change',function(){fillGu();refresh();});
   document.getElementById('fGu').addEventListener('change',refresh);
   document.getElementById('fCar').addEventListener('change',refresh);
   document.getElementById('mask').addEventListener('click',function(e){if(e.target===this)closeForm();});
   refresh();
+  loadFromServer(); // 서버에서 최신 공유 데이터 동기화
+}
+function applySharedUI(){
+  var n=document.getElementById('notice');
+  if(SHARED){ n.className='notice shared'; n.innerHTML='✅ <b>공유 모드</b> — 추가·수정·삭제가 구글시트에 저장되어 <b>모든 기기·브라우저에서 함께</b> 보입니다.'; }
+  var rb=document.getElementById('btnReset'); if(rb&&SHARED) rb.textContent='이 기기 캐시비우기';
 }
 function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}
 window.addEventListener('DOMContentLoaded',init);

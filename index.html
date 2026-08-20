@@ -35,6 +35,7 @@
   tr:hover td{background:#f9fbff}
   td.name{font-weight:600}
   .chip{display:inline-block;background:var(--chip);color:var(--chip-t);border-radius:20px;padding:2px 9px;font-size:12px;white-space:nowrap}
+  .kchip{display:inline-block;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:6px;padding:2px 8px;font-size:12px;white-space:nowrap}
   .tel{font-variant-numeric:tabular-nums;white-space:nowrap}
   .tel a{color:var(--brand);text-decoration:none}
   .act{white-space:nowrap;text-align:right}
@@ -95,7 +96,7 @@
 <body>
 <header>
   <h1>🏫 학원 전화번호 관리</h1>
-  <div class="sub">시설명·소재지·주소·운영자·전화번호·보유차량수·차량형태 조회 및 편집</div>
+  <div class="sub">시설명·시설종류·소재지·주소·운영자·전화번호·보유차량수·차량형태·차량상세 조회 및 편집</div>
 </header>
 
 <div class="wrap">
@@ -109,6 +110,7 @@
 
   <div class="toolbar">
     <input id="q" class="inp" placeholder="🔍 학원명·주소·운영자·전화번호 검색">
+    <select id="fKind" class="inp"><option value="">전체 종류</option></select>
     <select id="fSido" class="inp"><option value="">전체 시/도</option></select>
     <select id="fGu" class="inp"><option value="">전체 시/군/구</option></select>
     <select id="fCar" class="inp">
@@ -135,6 +137,7 @@
     <thead>
       <tr>
         <th>학원명(시설명)</th>
+        <th class="hide-sm">시설종류</th>
         <th class="hide-sm">소재지</th>
         <th>주소</th>
         <th class="hide-sm">운영자</th>
@@ -154,9 +157,12 @@
 <div class="mask" id="mask">
   <div class="modal">
     <h2 id="mTitle">학원 추가</h2>
-    <div class="field">
-      <label>학원명(시설명) *</label>
-      <input id="mName" class="inp">
+    <div class="row2">
+      <div class="field" style="flex:2"><label>학원명(시설명) *</label><input id="mName" class="inp"></div>
+      <div class="field"><label>시설종류</label>
+        <input id="mKind" class="inp" list="kindList" placeholder="학원/유치원 등">
+        <datalist id="kindList"><option value="학원"><option value="유치원"><option value="초등학교"><option value="중학교"><option value="고등학교"><option value="특수학교"><option value="교습소"><option value="각종학교"></datalist>
+      </div>
     </div>
     <div class="field">
       <label>주소 *</label>
@@ -243,9 +249,9 @@ try{ var _u=localStorage.getItem('haghwon_api_url'); if(_u) API_URL=_u; }catch(e
 var SHARED=/^https:\/\//.test(API_URL);
 
 /* ===== 레코드 모델 =====
-   BASE row = [name, addr, oper, tel, tel2, tel3, carType]
-   changes: id -> {status:'수정|추가|삭제', name,addr,oper,tel,tel2,carN,carT}
-   (구글시트 각 행 = 변경분 1건. 원본 24,116건은 data.js 그대로 유지) */
+   BASE row = [name, addr, oper, tel, tel2, tel3, carType, kind, carN, carDetail]
+   changes: id -> {status:'수정|추가|삭제', name,addr,oper,tel,tel2,carN,carT,carDetail,kind}
+   (구글시트 각 행 = 변경분 1건. 원본 15,903건은 data.js 그대로 유지) */
 var CKEY="haghwon_changes_v2", PKEY="haghwon_pending_v2";
 var changes={};   // 공유 변경분(서버=원본, 로컬=캐시)
 var pending=[];   // 서버 전송 실패분(오프라인 대기)
@@ -257,17 +263,21 @@ function saveCache(){ try{localStorage.setItem(CKEY,JSON.stringify(changes));loc
 
 function baseRec(i){
   var r=BASE[i];
-  return {id:"b"+i,name:r[0]||"",addr:r[1]||"",oper:r[2]||"",tel:r[3]||"",tel2:r[4]||"",tel3:r[5]||"",carN:"",carT:r[6]||"",carDetail:""};
+  return {id:"b"+i,name:r[0]||"",addr:r[1]||"",oper:r[2]||"",tel:r[3]||"",tel2:r[4]||"",tel3:r[5]||"",carT:r[6]||"",kind:r[7]||"",carN:(r[8]==null?"":String(r[8])),carDetail:r[9]||""};
 }
 function recFromChange(id,c){
-  return {id:id,name:c.name||"",addr:c.addr||"",oper:c.oper||"",tel:c.tel||"",tel2:c.tel2||"",tel3:"",carN:(c.carN==null?"":String(c.carN)),carT:c.carT||"",carDetail:c.carDetail||""};
+  return {id:id,name:c.name||"",addr:c.addr||"",oper:c.oper||"",tel:c.tel||"",tel2:c.tel2||"",tel3:"",carN:(c.carN==null?"":String(c.carN)),carT:c.carT||"",carDetail:c.carDetail||"",kind:c.kind||""};
 }
+var CHFIELDS=['name','addr','oper','tel','tel2','carN','carT','carDetail','kind'];
+function mergeChange(rec,c){ CHFIELDS.forEach(function(f){ if(c[f]!==undefined) rec[f]=c[f]; }); return rec; }
 function buildRecords(){
   var out=[];
   for(var i=0;i<BASE.length;i++){
     var id="b"+i, c=changes[id];
-    if(c){ if(c.status==='삭제') continue; out.push(recFromChange(id,c)); }
-    else out.push(baseRec(i));
+    if(c && c.status==='삭제') continue;
+    var rec=baseRec(i);
+    if(c) mergeChange(rec,c);   // 편집분 덮어쓰되 kind 등 기존값 보존
+    out.push(rec);
   }
   for(var k in changes){
     if(k.charAt(0)!=='a') continue;
@@ -300,6 +310,16 @@ function fillSido(){
     var o=document.createElement('option'); o.value=s; o.textContent=s; sel.appendChild(o);
   });
 }
+var KIND_ORDER=['학원','교습소','유치원','초등학교','중학교','고등학교','특수학교','각종학교'];
+function fillKind(){
+  var counts={}; ALL.forEach(function(r){ if(r.kind) counts[r.kind]=(counts[r.kind]||0)+1; });
+  var order=KIND_ORDER.filter(function(k){return counts[k];});
+  Object.keys(counts).forEach(function(k){ if(order.indexOf(k)<0)order.push(k); });
+  var sel=document.getElementById('fKind'), cur=sel.value;
+  sel.innerHTML='<option value="">전체 종류</option>';
+  order.forEach(function(k){ var o=document.createElement('option'); o.value=k; o.textContent=k+' ('+counts[k].toLocaleString()+')'; sel.appendChild(o); });
+  sel.value=cur;
+}
 function fillGu(){
   var sido=document.getElementById('fSido').value;
   var sel=document.getElementById('fGu');
@@ -319,7 +339,9 @@ function filterView(){
   var sido=document.getElementById('fSido').value;
   var gu=document.getElementById('fGu').value;
   var car=document.getElementById('fCar').value;
+  var kind=document.getElementById('fKind').value;
   VIEW=ALL.filter(function(r){
+    if(kind && r.kind!==kind) return false;
     if(sido && r.sido!==sido) return false;
     if(gu && r.gu!==gu) return false;
     if(car==="__none" && !( (r.carT||"").indexOf("없음")>=0 || (!r.carT && !r.carN) )) {
@@ -328,7 +350,7 @@ function filterView(){
     if(car==="__has"){ var has=(r.carN&&onlyDigits(r.carN)!=="0"&&onlyDigits(r.carN)!=="")||( r.carT && r.carT.indexOf("없음")<0 && r.carT.trim()!==""); if(!has)return false; }
     if(car==="__none"){ var none=((r.carT||"").indexOf("없음")>=0)||((!r.carT||r.carT.trim()==="")&&(!r.carN||r.carN.trim()==="")); if(!none)return false; }
     if(q){
-      var hay=(r.name+" "+r.addr+" "+r.oper+" "+r.carT).toLowerCase();
+      var hay=(r.name+" "+r.addr+" "+r.oper+" "+r.carT+" "+r.carDetail+" "+r.kind).toLowerCase();
       var telHay=onlyDigits(r.tel+r.tel2+r.tel3);
       if(hay.indexOf(q)<0 && !(qd && telHay.indexOf(qd)>=0)) return false;
     }
@@ -340,8 +362,9 @@ function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replac
 function telLink(t){ if(!t)return""; var d=onlyDigits(t); return '<a href="tel:'+d+'">'+esc(t)+'</a>'; }
 
 /* ===== 차량형태 셀(클릭 → 차량상세 팝업) ===== */
+function noVal(s){ s=(s||"").trim(); return (s===""||s==="-")?"":s; }
 function carCell(r){
-  var t=(r.carT||"").trim(), d=(r.carDetail||"").trim();
+  var t=noVal(r.carT), d=noVal(r.carDetail);
   var has=d!=="";
   var text=t||(has?"차량 있음":"");
   if(!text) return '<span class="carcell empty" title="클릭해 차량정보 입력" onclick="openCarInfo(\''+r.id+'\')">–</span>';
@@ -352,9 +375,9 @@ function openCarInfo(id){
   var r=ALL.find(function(x){return x.id===id;}); if(!r)return;
   ciEditId=id;
   document.getElementById('ciTitle').textContent=r.name||'차량 정보';
-  document.getElementById('ciType').textContent=r.carT||'(미지정)';
-  document.getElementById('ciCount').textContent=(r.carN?esc(r.carN)+'대':'(미입력)');
-  var d=(r.carDetail||"").trim(), body=document.getElementById('ciDetail');
+  document.getElementById('ciType').textContent=noVal(r.carT)||'(미지정)';
+  document.getElementById('ciCount').textContent=(noVal(r.carN)?esc(r.carN)+'대':'(미입력)');
+  var d=noVal(r.carDetail), body=document.getElementById('ciDetail');
   if(d){ body.innerHTML=d.split(/\s*,\s*/).filter(Boolean).map(function(x){return '<div class="ci-veh">🚐 '+esc(x)+'</div>';}).join(''); }
   else { body.innerHTML='<div class="ci-none">등록된 차량상세가 없습니다.<br>아래 <b>수정</b>에서 차명(차량번호)(승차정원)을 입력하세요.</div>'; }
   document.getElementById('ciMask').classList.add('on');
@@ -368,14 +391,15 @@ function render(){
   var pages=Math.max(1,Math.ceil(total/PAGE));
   if(page>pages)page=pages;
   var start=(page-1)*PAGE, slice=VIEW.slice(start,start+PAGE);
-  document.getElementById('count').innerHTML='총 <b>'+total.toLocaleString()+'</b>개 학원'+(total!==ALL.length?' (전체 '+ALL.length.toLocaleString()+'개 중)':'');
-  if(total===0){ tb.innerHTML='<tr><td colspan="8"><div class="empty">조건에 맞는 학원이 없습니다.</div></td></tr>'; document.getElementById('pager').innerHTML=''; return; }
+  document.getElementById('count').innerHTML='총 <b>'+total.toLocaleString()+'</b>개 시설'+(total!==ALL.length?' (전체 '+ALL.length.toLocaleString()+'개 중)':'');
+  if(total===0){ tb.innerHTML='<tr><td colspan="9"><div class="empty">조건에 맞는 학원이 없습니다.</div></td></tr>'; document.getElementById('pager').innerHTML=''; return; }
   var html='';
   slice.forEach(function(r){
     var added=r.id[0]==="a"?'<span class="badge-added">추가</span>':'';
     var tels=[r.tel,r.tel2,r.tel3].filter(Boolean).map(telLink).join('<br>');
     html+='<tr>'+
       '<td class="name">'+esc(r.name)+added+'</td>'+
+      '<td class="hide-sm">'+(r.kind?'<span class="kchip">'+esc(r.kind)+'</span>':'')+'</td>'+
       '<td class="hide-sm">'+(r.sojae?'<span class="chip">'+esc(r.sojae)+'</span>':'')+'</td>'+
       '<td>'+esc(r.addr)+'</td>'+
       '<td class="hide-sm">'+esc(r.oper)+'</td>'+
@@ -408,7 +432,7 @@ function renderStats(){
   Object.keys(counts).forEach(function(s){ if(order.indexOf(s)<0) order.push(s); }); // 기타 등 뒤로
   var cur=document.getElementById('fSido').value;
   var total=ALL.length;
-  var html='<div class="dash-top"><span class="t">📊 전국 학원 현황</span>'+
+  var html='<div class="dash-top"><span class="t">📊 전국 통학차량 시설 현황</span>'+
     '<span class="total">'+total.toLocaleString()+'<small>개</small></span>'+
     '<span class="t" style="font-weight:400;color:var(--sub)">· '+order.length+'개 지역</span></div>';
   html+='<div class="dash-grid">';
@@ -432,8 +456,8 @@ var editingId=null;
 function openForm(id){
   editingId=id||null;
   document.getElementById('mTitle').textContent=id?'학원 수정':'학원 추가';
-  var r=id?ALL.find(function(x){return x.id===id;}):{name:"",addr:"",oper:"",tel:"",tel2:"",carN:"",carT:"",carDetail:""};
-  mName.value=r.name||""; mAddr.value=r.addr||""; mOper.value=r.oper||"";
+  var r=id?ALL.find(function(x){return x.id===id;}):{name:"",addr:"",oper:"",tel:"",tel2:"",carN:"",carT:"",carDetail:"",kind:""};
+  mName.value=r.name||""; mAddr.value=r.addr||""; mOper.value=r.oper||""; mKind.value=r.kind||"";
   mTel.value=r.tel||""; mTel2.value=r.tel2||""; mCarN.value=r.carN||""; mCarT.value=r.carT||""; mCarDetail.value=r.carDetail||"";
   previewSojae();
   document.getElementById('mask').classList.add('on');
@@ -444,22 +468,22 @@ function saveForm(){
   var name=mName.value.trim(), addr=mAddr.value.trim();
   if(!name){alert('학원명을 입력하세요.');return;}
   if(!addr){alert('주소를 입력하세요.');return;}
-  var data={name:name,addr:addr,oper:mOper.value.trim(),tel:mTel.value.trim(),tel2:mTel2.value.trim(),carN:mCarN.value.trim(),carT:mCarT.value.trim(),carDetail:mCarDetail.value.trim()};
+  var data={name:name,addr:addr,oper:mOper.value.trim(),tel:mTel.value.trim(),tel2:mTel2.value.trim(),carN:mCarN.value.trim(),carT:mCarT.value.trim(),carDetail:mCarDetail.value.trim(),kind:mKind.value.trim()};
   var id, status;
   if(editingId){ id=editingId; status=(id.charAt(0)==='a')?'추가':'수정'; }
   else { id='a'+Date.now()+Math.floor(Math.random()*1000); status='추가'; }
   data.status=status;
   changes[id]=data;
   saveCache(); pushToServer(id,data);
-  rebuild(); closeForm(); refresh();
+  rebuild(); fillKind(); closeForm(); refresh();
 }
 function delRec(id){
   var r=ALL.find(function(x){return x.id===id;});
   if(!confirm('삭제하시겠습니까?'+(SHARED?' (모든 기기에서 삭제됩니다)':'')+'\n\n'+(r?r.name:'')+'\n'+(r?r.addr:''))) return;
-  var snap={status:'삭제',name:r?r.name:'',addr:r?r.addr:'',oper:r?r.oper:'',tel:r?r.tel:'',tel2:r?r.tel2:'',carN:r?r.carN:'',carT:r?r.carT:'',carDetail:r?r.carDetail:''};
+  var snap={status:'삭제',name:r?r.name:'',addr:r?r.addr:'',oper:r?r.oper:'',tel:r?r.tel:'',tel2:r?r.tel2:'',carN:r?r.carN:'',carT:r?r.carT:'',carDetail:r?r.carDetail:'',kind:r?r.kind:''};
   changes[id]=snap;
   saveCache(); pushToServer(id,snap);
-  rebuild(); refresh();
+  rebuild(); fillKind(); refresh();
 }
 function resetAll(){
   if(SHARED){
@@ -496,8 +520,8 @@ function restore(inp){
 }
 function csvCell(s){ s=(s==null?"":String(s)); if(/[",\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
 function exportCSV(){
-  var rows=[['학원명','소재지','주소','운영자','전화번호','전화번호2','전화번호3','보유차량수','차량형태','차량상세']];
-  VIEW.forEach(function(r){ rows.push([r.name,r.sojae,r.addr,r.oper,r.tel,r.tel2,r.tel3,r.carN,r.carT,r.carDetail]); });
+  var rows=[['학원명','시설종류','소재지','주소','운영자','전화번호','전화번호2','전화번호3','보유차량수','차량형태','차량상세']];
+  VIEW.forEach(function(r){ rows.push([r.name,r.kind,r.sojae,r.addr,r.oper,r.tel,r.tel2,r.tel3,r.carN,r.carT,r.carDetail]); });
   var csv=rows.map(function(row){return row.map(csvCell).join(',');}).join('\r\n');
   dl('학원목록_'+stamp()+'.csv','﻿'+csv,'text/csv;charset=utf-8');
 }
@@ -529,7 +553,7 @@ function loadFromServer(){
   setSync('loading');
   fetch(API_URL,{method:'GET'}).then(function(r){return r.json();}).then(function(res){
     if(res&&res.ok&&res.rows){
-      var srv={}; res.rows.forEach(function(row){ srv[row.id]={status:row.status,name:row.name,addr:row.addr,oper:row.oper,tel:row.tel,tel2:row.tel2,carN:row.carN,carT:row.carT,carDetail:row.carDetail}; });
+      var srv={}; res.rows.forEach(function(row){ srv[row.id]={status:row.status,name:row.name,addr:row.addr,oper:row.oper,tel:row.tel,tel2:row.tel2,carN:row.carN,carT:row.carT,carDetail:row.carDetail,kind:row.kind}; });
       pending.forEach(function(p){ srv[p.id]=p; }); // 미전송 로컬 변경은 유지
       changes=srv; saveCache(); setSync(pending.length?'err':'ok');
     } else setSync('offline');
@@ -539,16 +563,17 @@ function loadFromServer(){
 
 /* ===== 초기화 ===== */
 function rebuild(){ ALL=buildRecords(); computeDerived(); }
-function rebuildAll(){ rebuild(); buildRegionIndex(); rebuildSido(); refresh(); }
+function rebuildAll(){ rebuild(); buildRegionIndex(); rebuildSido(); fillKind(); refresh(); }
 function rebuildSido(){
   var sel=document.getElementById('fSido'), cur=sel.value;
   sel.innerHTML='<option value="">전체 시/도</option>'; fillSido(); sel.value=cur;
 }
 function init(){
   loadCache();
-  rebuild(); buildRegionIndex(); fillSido(); fillGu();
+  rebuild(); buildRegionIndex(); fillSido(); fillGu(); fillKind();
   applySharedUI();
   document.getElementById('q').addEventListener('input',debounce(refresh,200));
+  document.getElementById('fKind').addEventListener('change',refresh);
   document.getElementById('fSido').addEventListener('change',function(){fillGu();refresh();});
   document.getElementById('fGu').addEventListener('change',refresh);
   document.getElementById('fCar').addEventListener('change',refresh);

@@ -60,6 +60,19 @@
   .row2>div{flex:1}
   .modal-act{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
   .notice{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:10px 12px;font-size:12.5px;margin-bottom:12px;line-height:1.5}
+  /* 현황판 */
+  .dash{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .dash-top{display:flex;align-items:baseline;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+  .dash-top .t{font-size:14px;font-weight:700;color:var(--txt)}
+  .dash-top .total{font-size:22px;font-weight:800;color:var(--brand)}
+  .dash-top .total small{font-size:13px;font-weight:600;color:var(--sub)}
+  .dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:7px}
+  .rg{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;cursor:pointer;transition:.12s}
+  .rg:hover{background:#eef2ff;border-color:#c7d2fe}
+  .rg.on{background:var(--brand);border-color:var(--brand)}
+  .rg.on .rg-n,.rg.on .rg-c{color:#fff}
+  .rg-n{font-size:13px;font-weight:600;color:var(--txt)}
+  .rg-c{font-size:13px;font-weight:700;color:var(--brand);font-variant-numeric:tabular-nums}
   @media(max-width:720px){
     .hide-sm{display:none}
     .wrap{padding:12px}
@@ -78,6 +91,9 @@
     ⚠️ 추가·수정·삭제한 내용은 <b>이 브라우저에만</b> 저장됩니다(다른 기기와 공유 안 됨).
     중요한 변경은 <b>[백업(내보내기)]</b>로 파일 저장을 권장합니다. 원본 데이터는 항상 유지됩니다.
   </div>
+
+  <!-- 현황판 -->
+  <div class="dash" id="dash"></div>
 
   <div class="toolbar">
     <input id="q" class="inp" placeholder="🔍 학원명·주소·운영자·전화번호 검색">
@@ -317,7 +333,31 @@ function renderPager(pages){
     '<button onclick="go('+pages+')" '+(page===pages?'disabled':'')+'>끝 »</button>';
 }
 function go(n){page=n; render(); window.scrollTo(0,0);}
-function refresh(){ filterView(); render(); }
+
+function renderStats(){
+  var counts={}; ALL.forEach(function(r){ var s=r.sido||"기타"; counts[s]=(counts[s]||0)+1; });
+  var order=SHORT.filter(function(s){return counts[s];});
+  Object.keys(counts).forEach(function(s){ if(order.indexOf(s)<0) order.push(s); }); // 기타 등 뒤로
+  var cur=document.getElementById('fSido').value;
+  var total=ALL.length;
+  var html='<div class="dash-top"><span class="t">📊 전국 학원 현황</span>'+
+    '<span class="total">'+total.toLocaleString()+'<small>개</small></span>'+
+    '<span class="t" style="font-weight:400;color:var(--sub)">· '+order.length+'개 지역</span></div>';
+  html+='<div class="dash-grid">';
+  order.forEach(function(s){
+    html+='<div class="rg'+(cur===s?' on':'')+'" onclick="pickSido(\''+s+'\')">'+
+      '<span class="rg-n">'+esc(s)+'</span><span class="rg-c">'+counts[s].toLocaleString()+'</span></div>';
+  });
+  html+='</div>';
+  document.getElementById('dash').innerHTML=html;
+}
+function pickSido(s){
+  var sel=document.getElementById('fSido');
+  sel.value=(sel.value===s?'':s); // 같은 지역 다시 클릭하면 해제
+  fillGu(); refresh(); window.scrollTo(0,0);
+}
+
+function refresh(){ filterView(); render(); renderStats(); }
 
 /* ===== 추가/수정 ===== */
 var editingId=null;

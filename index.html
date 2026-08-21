@@ -359,7 +359,7 @@ try{ var _u=localStorage.getItem('haghwon_api_url'); if(_u) API_URL=_u; }catch(e
 var SHARED=/^https:\/\//.test(API_URL);
 
 /* ===== 전기 통학버스 브로셔 후속통화 — A~E 통화결과 분류 ===== */
-var BROCHURE_URL="";  // 브로셔 링크(문자 발송용). 있으면 여기에 넣으면 B분류 [문자 문구 복사]에 자동 포함.
+var BROCHURE_URL="https://drive.google.com/file/d/1qMcUMxlavxrMbvvwUZk6CfgAwL_jm5Ke/view?usp=drive_link";  // 브로셔 링크(문자 발송용). B분류 [문자 문구 복사]에 자동 포함.
 try{ var _b=localStorage.getItem('haghwon_brochure_url'); if(_b) BROCHURE_URL=_b; }catch(e){}
 var RESULTS=[
   {k:'A',label:'부재·무응답',memo:'부재·무응답 — 재통화 필요',follow:'시간대 바꿔 재통화'},

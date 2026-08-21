@@ -880,7 +880,7 @@ function init(){
 }
 function applySharedUI(){
   var n=document.getElementById('notice');
-  if(SHARED){ n.className='notice shared'; n.innerHTML='✅ <b>공유 모드</b> — 추가·수정·삭제가 구글시트에 저장되어 <b>모든 기기·브라우저에서 함께</b> 보입니다.'; }
+  if(SHARED){ n.style.display='none'; }
   var rb=document.getElementById('btnReset'); if(rb&&SHARED) rb.textContent='이 기기 캐시비우기';
 }
 function debounce(fn,ms){var t;return function(){clearTimeout(t);t=setTimeout(fn,ms);};}

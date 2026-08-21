@@ -183,16 +183,10 @@ function tryUnlock(){
     <select id="fResult" class="inp"><option value="">통화결과 전체</option></select>
     <select id="fKind" class="inp"><option value="">전체 종류</option></select>
     <select id="fSido" class="inp"><option value="">전체 시/도</option></select>
-    <select id="fGu" class="inp"><option value="">전체 시/군/구</option></select>
-    <select id="fCar" class="inp">
-      <option value="">차량 전체</option>
-      <option value="__has">차량 보유(있음)</option>
-      <option value="__none">차량 없음</option>
-    </select>
-    <button class="btn btn-p" onclick="openForm()">+ 학원 추가</button>
   </div>
   <div class="toolbar" style="margin-top:-4px">
     <button class="btn btn-g" onclick="loadFromServer()">🔄 새로고침</button>
+    <button class="btn btn-p" onclick="openForm()">+ 학원 추가</button>
     <button class="btn btn-g" onclick="exportCSV()">⬇ 엑셀(CSV) 내보내기</button>
     <button class="btn btn-g" onclick="backup()">💾 백업(내보내기)</button>
     <button class="btn btn-g" onclick="document.getElementById('restoreFile').click()">↩ 백업 복원</button>
@@ -475,6 +469,7 @@ function fillKind(){
 function fillGu(){
   var sido=document.getElementById('fSido').value;
   var sel=document.getElementById('fGu');
+  if(!sel) return;
   sel.innerHTML='<option value="">전체 시/군/구</option>';
   if(sido&&regionIndex[sido]){
     Object.keys(regionIndex[sido]).sort().forEach(function(g){
@@ -489,8 +484,8 @@ function filterView(){
   var q=document.getElementById('q').value.trim().toLowerCase();
   var qd=onlyDigits(q);
   var sido=document.getElementById('fSido').value;
-  var gu=document.getElementById('fGu').value;
-  var car=document.getElementById('fCar').value;
+  var gu=(document.getElementById('fGu')||{}).value||'';
+  var car=(document.getElementById('fCar')||{}).value||'';
   var kind=document.getElementById('fKind').value;
   var send=document.getElementById('fSend').value;
   var con=document.getElementById('fConsult').value;
@@ -866,8 +861,8 @@ function init(){
   document.getElementById('fResult').addEventListener('change',refresh);
   document.getElementById('fKind').addEventListener('change',refresh);
   document.getElementById('fSido').addEventListener('change',function(){fillGu();refresh();});
-  document.getElementById('fGu').addEventListener('change',refresh);
-  document.getElementById('fCar').addEventListener('change',refresh);
+  var _fGu=document.getElementById('fGu'); if(_fGu)_fGu.addEventListener('change',refresh);
+  var _fCar=document.getElementById('fCar'); if(_fCar)_fCar.addEventListener('change',refresh);
   document.getElementById('mask').addEventListener('click',function(e){if(e.target===this)closeForm();});
   document.getElementById('ciMask').addEventListener('click',function(e){if(e.target===this)closeCarInfo();});
   document.getElementById('cnMask').addEventListener('click',function(e){if(e.target===this)closeConsult();});

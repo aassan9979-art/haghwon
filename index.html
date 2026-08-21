@@ -39,6 +39,20 @@
   .schip{display:inline-block;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;white-space:nowrap}
   .schip.sent{background:#dcfce7;color:#15803d}
   .schip.unsent{background:#f1f5f9;color:#94a3b8}
+  /* 통화결과 A~E 뱃지 */
+  .rchip{display:inline-block;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:800;white-space:nowrap;margin-left:5px;vertical-align:middle}
+  .rchip.A{background:#e2e8f0;color:#475569}
+  .rchip.B{background:#dbeafe;color:#1d4ed8}
+  .rchip.C{background:#f1f5f9;color:#64748b}
+  .rchip.D{background:#ffedd5;color:#c2410c}
+  .rchip.E{background:#fee2e2;color:#b91c1c}
+  /* 상담 모달 통화결과 버튼 */
+  .rbtns{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:4px}
+  .rbtn{border:1px solid var(--line);border-radius:9px;padding:9px 4px;cursor:pointer;text-align:center;background:#f8fafc;font-size:11.5px;font-weight:600;color:#334155;line-height:1.3;transition:.12s}
+  .rbtn:hover{background:#eef2ff;border-color:#c7d2fe}
+  .rbtn .rk{display:block;font-size:16px;font-weight:800;margin-bottom:3px;color:var(--sub)}
+  .rbtn.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .rbtn.on .rk{color:#fff}
   .tel{font-variant-numeric:tabular-nums;white-space:nowrap}
   .tel a{color:var(--brand);text-decoration:none}
   .act{white-space:nowrap;text-align:right}
@@ -91,6 +105,12 @@
   .sbtn.ncon{background:#f1f5f9;color:#64748b}
   .sbtn.sncon{background:#ffedd5;color:#9a3412}
   .sbtn.nncon{background:#f1f5f9;color:#64748b}
+  .sbtn.resA{background:#e2e8f0;color:#475569}
+  .sbtn.resB{background:#dbeafe;color:#1d4ed8}
+  .sbtn.resC{background:#f1f5f9;color:#64748b}
+  .sbtn.resD{background:#ffedd5;color:#c2410c}
+  .sbtn.resE{background:#fee2e2;color:#b91c1c}
+  .sbtn.res.on{outline-color:#0ea5e9}
   .sbtn.on{outline:2px solid #16a34a;outline-offset:1px}
   .sbtn.unsent.on,.sbtn.ncon.on,.sbtn.nncon.on{outline-color:#64748b}
   .sbtn.con.on,.sbtn.sncon.on{outline-color:#ea580c}
@@ -164,6 +184,7 @@ function tryUnlock(){
     <input id="q" class="inp" placeholder="🔍 학원명·주소·운영자·전화번호 검색">
     <select id="fSend" class="inp"><option value="">발송 전체</option></select>
     <select id="fConsult" class="inp"><option value="">상담 전체</option></select>
+    <select id="fResult" class="inp"><option value="">통화결과 전체</option></select>
     <select id="fKind" class="inp"><option value="">전체 종류</option></select>
     <select id="fSido" class="inp"><option value="">전체 시/도</option></select>
     <select id="fGu" class="inp"><option value="">전체 시/군/구</option></select>
@@ -272,6 +293,15 @@ function tryUnlock(){
   <div class="modal" style="max-width:560px">
     <h2 id="cnTitle">상담</h2>
     <div id="cnPhone" style="margin:-6px 0 12px;font-size:14px"></div>
+    <div class="notice" style="margin-bottom:12px">
+      📮 <b>브로셔 안내 멘트</b><br>
+      "전기 어린이 통학버스 안내 브로셔를 우편으로 보내드렸는데 혹시 받아보셨을까요?"
+    </div>
+    <div class="field">
+      <label>통화결과 분류 (버튼을 누르면 표준 메모가 이력에 자동 기록됩니다)</label>
+      <div class="rbtns" id="cnResBtns"></div>
+      <div class="hint" id="cnResHint" style="margin-top:7px;min-height:18px"></div>
+    </div>
     <div class="field">
       <label>새 상담 내용 (전화 상담 후 입력 → [상담 추가])</label>
       <textarea id="cnNew" class="inp" rows="3" placeholder="예: 담당자 통화, 통학차량 견적 문의. 다음주 재통화 예정." style="width:100%;resize:vertical"></textarea>
@@ -328,6 +358,18 @@ var API_URL="https://script.google.com/macros/s/AKfycbzZr1Tm4taYMcK_cV3D8AdKwl-H
 try{ var _u=localStorage.getItem('haghwon_api_url'); if(_u) API_URL=_u; }catch(e){}
 var SHARED=/^https:\/\//.test(API_URL);
 
+/* ===== 전기 통학버스 브로셔 후속통화 — A~E 통화결과 분류 ===== */
+var BROCHURE_URL="";  // 브로셔 링크(문자 발송용). 있으면 여기에 넣으면 B분류 [문자 문구 복사]에 자동 포함.
+try{ var _b=localStorage.getItem('haghwon_brochure_url'); if(_b) BROCHURE_URL=_b; }catch(e){}
+var RESULTS=[
+  {k:'A',label:'부재·무응답',memo:'부재·무응답 — 재통화 필요',follow:'시간대 바꿔 재통화'},
+  {k:'B',label:'못받음<br>(링크발송)',memo:'브로셔 미수령 — 링크 문자 재발송',follow:'브로셔 링크 문자 발송 후 며칠 뒤 재통화'},
+  {k:'C',label:'관심없음',memo:'브로셔 수령·관심없음 — 간단 안내 후 종료',follow:'종료 (필요 시 추후 재접촉)'},
+  {k:'D',label:'관심고객',memo:'★관심고객★ 보조금/가격 문의 — 전문상담 재연락 배정',follow:'★관심고객★ 전문 상담원에게 인계'},
+  {k:'E',label:'번호오류<br>·폐업',memo:'번호오류·폐업 — 명단 정정/삭제 대상',follow:'명단 정정/삭제'}
+];
+function resLabel(k){ var r=RESULTS.find(function(x){return x.k===k;}); return r?r.label.replace(/<br>/g,''):''; }
+
 /* ===== 레코드 모델 =====
    BASE row = [name, addr, oper, tel, tel2, tel3, carType, kind, carN, carDetail, send]
    changes: id -> {status:'수정|추가|삭제', name,addr,oper,tel,tel2,carN,carT,carDetail,kind,send,consult}
@@ -344,12 +386,12 @@ function saveCache(){ try{localStorage.setItem(CKEY,JSON.stringify(changes));loc
 
 function baseRec(i){
   var r=BASE[i];
-  return {id:"b"+i,name:r[0]||"",addr:r[1]||"",oper:r[2]||"",tel:r[3]||"",tel2:r[4]||"",tel3:r[5]||"",carT:r[6]||"",kind:r[7]||"",carN:(r[8]==null?"":String(r[8])),carDetail:r[9]||"",send:r[10]||"미발송",consult:""};
+  return {id:"b"+i,name:r[0]||"",addr:r[1]||"",oper:r[2]||"",tel:r[3]||"",tel2:r[4]||"",tel3:r[5]||"",carT:r[6]||"",kind:r[7]||"",carN:(r[8]==null?"":String(r[8])),carDetail:r[9]||"",send:r[10]||"미발송",consult:"",callres:""};
 }
 function recFromChange(id,c){
-  return {id:id,name:c.name||"",addr:c.addr||"",oper:c.oper||"",tel:c.tel||"",tel2:c.tel2||"",tel3:"",carN:(c.carN==null?"":String(c.carN)),carT:c.carT||"",carDetail:c.carDetail||"",kind:c.kind||"",send:c.send||"미발송",consult:c.consult||""};
+  return {id:id,name:c.name||"",addr:c.addr||"",oper:c.oper||"",tel:c.tel||"",tel2:c.tel2||"",tel3:"",carN:(c.carN==null?"":String(c.carN)),carT:c.carT||"",carDetail:c.carDetail||"",kind:c.kind||"",send:c.send||"미발송",consult:c.consult||"",callres:c.callres||""};
 }
-var CHFIELDS=['name','addr','oper','tel','tel2','carN','carT','carDetail','kind','send','consult'];
+var CHFIELDS=['name','addr','oper','tel','tel2','carN','carT','carDetail','kind','send','consult','callres'];
 function mergeChange(rec,c){ CHFIELDS.forEach(function(f){ if(c[f]!==undefined) rec[f]=c[f]; }); return rec; }
 function buildRecords(){
   var out=[];
@@ -415,6 +457,15 @@ function fillConsult(){
     '<option value="nn">└ 그냥 미상담 ('+nn.toLocaleString()+')</option>';
   sel.value=cur;
 }
+function fillResult(){
+  var c={}; ALL.forEach(function(r){ if(r.callres) c[r.callres]=(c[r.callres]||0)+1; });
+  var none=ALL.filter(function(r){return !r.callres;}).length;
+  var sel=document.getElementById('fResult'), cur=sel.value;
+  var html='<option value="">통화결과 전체 ('+ALL.length.toLocaleString()+')</option>';
+  RESULTS.forEach(function(x){ html+='<option value="'+x.k+'">'+x.k+' · '+resLabel(x.k)+' ('+((c[x.k]||0)).toLocaleString()+')</option>'; });
+  html+='<option value="__none">미분류 ('+none.toLocaleString()+')</option>';
+  sel.innerHTML=html; sel.value=cur;
+}
 var KIND_ORDER=['학원','교습소','유치원','초등학교','중학교','고등학교','특수학교','각종학교'];
 function fillKind(){
   var counts={}; ALL.forEach(function(r){ if(r.kind) counts[r.kind]=(counts[r.kind]||0)+1; });
@@ -447,8 +498,11 @@ function filterView(){
   var kind=document.getElementById('fKind').value;
   var send=document.getElementById('fSend').value;
   var con=document.getElementById('fConsult').value;
+  var res=document.getElementById('fResult').value;
   VIEW=ALL.filter(function(r){
     if(send && (r.send||'미발송')!==send) return false;
+    if(res==='__none' && r.callres) return false;
+    if(res && res!=='__none' && (r.callres||'')!==res) return false;
     if(con==='y' && consultCount(r.consult)===0) return false;
     if(con==='n' && consultCount(r.consult)>0) return false;
     if(con==='ns' && !(consultCount(r.consult)===0 && (r.send||'미발송')==='1차발송')) return false;
@@ -490,20 +544,58 @@ function consultBtn(r){
   if(n>0) return '<button class="mini con has" onclick="openConsult(\''+r.id+'\')">💬 상담 '+n+'</button>';
   return '<button class="mini con" onclick="openConsult(\''+r.id+'\')">＋상담</button>';
 }
-var cnEditId=null;
+function resChip(k){ if(!k)return''; return '<span class="rchip '+esc(k)+'" title="'+esc(resLabel(k))+'">'+esc(k)+'</span>'; }
+var cnEditId=null, cnResult='';
 function openConsult(id){
   var r=ALL.find(function(x){return x.id===id;}); if(!r)return;
-  cnEditId=id;
+  cnEditId=id; cnResult=r.callres||'';
   document.getElementById('cnTitle').textContent=r.name||'상담';
   var tel=r.tel||r.tel2||"";
   document.getElementById('cnPhone').innerHTML=(tel?'📞 '+telLink(tel):'<span style="color:var(--sub)">전화번호 없음</span>')
-    +' &nbsp;·&nbsp; '+sendChip(r.send);
+    +' &nbsp;·&nbsp; '+sendChip(r.send)+(cnResult?' &nbsp;·&nbsp; '+resChip(cnResult):'');
   document.getElementById('cnText').value=r.consult||"";
+  cnRenderResBtns();
   document.getElementById('mask').classList.remove('on');
   document.getElementById('cnMask').classList.add('on');
   setTimeout(function(){document.getElementById('cnNew').focus();},50);
 }
-function closeConsult(){ document.getElementById('cnMask').classList.remove('on'); cnEditId=null; }
+function closeConsult(){ document.getElementById('cnMask').classList.remove('on'); cnEditId=null; cnResult=''; }
+function cnRenderResBtns(){
+  var box=document.getElementById('cnResBtns'); if(!box)return;
+  box.innerHTML=RESULTS.map(function(x){
+    return '<div class="rbtn'+(cnResult===x.k?' on':'')+'" onclick="cnSetResult(\''+x.k+'\')">'+
+      '<span class="rk">'+x.k+'</span>'+x.label+'</div>';
+  }).join('');
+  var h=document.getElementById('cnResHint');
+  var r=RESULTS.find(function(x){return x.k===cnResult;});
+  h.innerHTML=r?('➡ <b>['+r.k+']</b> '+r.follow+
+    (r.k==='B'?' &nbsp;<button class="btn btn-g" style="padding:4px 9px;font-size:11px" onclick="cnCopySMS()">📩 문자 문구 복사</button>':'')):
+    '<span style="color:var(--sub)">통화 후 해당 결과를 선택하세요. 다시 누르면 해제됩니다.</span>';
+}
+function cnSetResult(k){
+  cnResult=(cnResult===k)?'':k;
+  cnRenderResBtns();
+  if(cnResult){
+    var r=RESULTS.find(function(x){return x.k===cnResult;});
+    var box=document.getElementById('cnText');
+    var line='['+r.k+'] '+r.memo;
+    if((box.value.split('\n')[0]||'').indexOf(line)<0){   // 최신줄이 같은 메모면 중복 방지
+      box.value='['+cnStamp()+'] '+line+(box.value.trim()?'\n'+box.value:'');
+    }
+  }
+  cnSave();
+  var r2=ALL.find(function(x){return x.id===cnEditId;});
+  if(r2){ var tel=r2.tel||r2.tel2||"";
+    document.getElementById('cnPhone').innerHTML=(tel?'📞 '+telLink(tel):'<span style="color:var(--sub)">전화번호 없음</span>')
+      +' &nbsp;·&nbsp; '+sendChip(r2.send)+(cnResult?' &nbsp;·&nbsp; '+resChip(cnResult):''); }
+}
+function cnCopySMS(){
+  var r=ALL.find(function(x){return x.id===cnEditId;}), name=r?r.name:'';
+  var txt=name+'님, 전기 어린이 통학버스 안내 브로셔입니다.\n'+(BROCHURE_URL||'[브로셔 링크를 여기에]');
+  var done=function(){ var h=document.getElementById('cnResHint'); var old=h.innerHTML; h.innerHTML='✅ 문자 문구를 복사했습니다. 문자앱에 붙여넣어 발송하세요.'; setTimeout(function(){cnRenderResBtns();},1800); };
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done,function(){alert(txt);}); }
+  else { alert(txt); }
+}
 function cnStamp(){ var d=new Date(); function z(n){return(n<10?'0':'')+n;} return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+' '+z(d.getHours())+':'+z(d.getMinutes()); }
 function cnAddToday(){
   var ta=document.getElementById('cnNew'); var txt=ta.value.trim();
@@ -523,9 +615,10 @@ function cnSave(){
   };
   if(!base.status) base.status=(id.charAt(0)==='a')?'추가':'수정';
   base.consult=document.getElementById('cnText').value.trim();
+  base.callres=cnResult;
   changes[id]=base;
   saveCache(); pushToServer(id,base);
-  rebuild(); fillConsult(); refresh();
+  rebuild(); fillConsult(); fillResult(); refresh();
 }
 var ciEditId=null;
 function openCarInfo(id){
@@ -555,7 +648,7 @@ function render(){
     var added=r.id[0]==="a"?'<span class="badge-added">추가</span>':'';
     var tels=[r.tel,r.tel2,r.tel3].filter(Boolean).map(telLink).join('<br>');
     html+='<tr>'+
-      '<td class="name">'+esc(r.name)+added+'</td>'+
+      '<td class="name">'+esc(r.name)+added+resChip(r.callres)+'</td>'+
       '<td>'+sendChip(r.send)+'</td>'+
       '<td class="hide-sm">'+(r.kind?'<span class="kchip">'+esc(r.kind)+'</span>':'')+'</td>'+
       '<td class="hide-sm">'+(r.sojae?'<span class="chip">'+esc(r.sojae)+'</span>':'')+'</td>'+
@@ -608,6 +701,16 @@ function renderStats(){
     '<span class="sbtn ncon'+(curCon==='n'?' on':'')+'" onclick="pickConsult(\'n\')">미상담 '+(total-cons).toLocaleString()+'</span>'+
     '<span class="sbtn sncon sub'+(curCon==='ns'?' on':'')+'" onclick="pickConsult(\'ns\')">📮 발송미상담 '+sncon.toLocaleString()+'</span>'+
     '<span class="sbtn nncon sub'+(curCon==='nn'?' on':'')+'" onclick="pickConsult(\'nn\')">그냥 미상담 '+nncon.toLocaleString()+'</span></div>';
+  // 통화결과 A~E 배지
+  var rc={}; ALL.forEach(function(r){ if(r.callres) rc[r.callres]=(rc[r.callres]||0)+1; });
+  var curRes=document.getElementById('fResult').value;
+  html+='<div class="dash-top" style="margin:2px 0 12px;padding-top:10px;border-top:1px dashed var(--line)">'+
+    '<span class="t" style="font-size:13px">📞 통화결과</span>';
+  RESULTS.forEach(function(x){
+    html+='<span class="sbtn res res'+x.k+(curRes===x.k?' on':'')+'" onclick="pickResult(\''+x.k+'\')">'+
+      x.k+' '+resLabel(x.k)+' '+((rc[x.k]||0)).toLocaleString()+'</span>';
+  });
+  html+='</div>';
   html+='<div class="dash-grid">';
   order.forEach(function(s){
     html+='<div class="rg'+(cur===s?' on':'')+'" onclick="pickSido(\''+s+'\')">'+
@@ -628,6 +731,11 @@ function pickSend(s){
 }
 function pickConsult(s){
   var sel=document.getElementById('fConsult');
+  sel.value=(sel.value===s?'':s);
+  refresh(); window.scrollTo(0,0);
+}
+function pickResult(s){
+  var sel=document.getElementById('fResult');
   sel.value=(sel.value===s?'':s);
   refresh(); window.scrollTo(0,0);
 }
@@ -656,9 +764,10 @@ function saveForm(){
   if(editingId){ id=editingId; status=(id.charAt(0)==='a')?'추가':'수정'; }
   else { id='a'+Date.now()+Math.floor(Math.random()*1000); status='추가'; }
   data.status=status;
+  if(editingId){ var er=ALL.find(function(x){return x.id===editingId;}); if(er){ data.consult=er.consult||''; data.callres=er.callres||''; } } // 상담이력·통화결과 보존
   changes[id]=data;
   saveCache(); pushToServer(id,data);
-  rebuild(); fillKind(); fillSend(); closeForm(); refresh();
+  rebuild(); fillKind(); fillSend(); fillConsult(); fillResult(); closeForm(); refresh();
 }
 function delRec(id){
   var r=ALL.find(function(x){return x.id===id;});
@@ -666,7 +775,7 @@ function delRec(id){
   var snap={status:'삭제',name:r?r.name:'',addr:r?r.addr:'',oper:r?r.oper:'',tel:r?r.tel:'',tel2:r?r.tel2:'',carN:r?r.carN:'',carT:r?r.carT:'',carDetail:r?r.carDetail:'',kind:r?r.kind:'',send:r?r.send:''};
   changes[id]=snap;
   saveCache(); pushToServer(id,snap);
-  rebuild(); fillKind(); fillSend(); fillConsult(); refresh();
+  rebuild(); fillKind(); fillSend(); fillConsult(); fillResult(); refresh();
 }
 function resetAll(){
   if(SHARED){
@@ -703,8 +812,8 @@ function restore(inp){
 }
 function csvCell(s){ s=(s==null?"":String(s)); if(/[",\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
 function exportCSV(){
-  var rows=[['학원명','발송상태','시설종류','소재지','주소','운영자','전화번호','전화번호2','전화번호3','보유차량수','차량형태','차량상세','상담이력']];
-  VIEW.forEach(function(r){ rows.push([r.name,r.send,r.kind,r.sojae,r.addr,r.oper,r.tel,r.tel2,r.tel3,r.carN,r.carT,r.carDetail,r.consult]); });
+  var rows=[['학원명','발송상태','통화결과','통화결과설명','시설종류','소재지','주소','운영자','전화번호','전화번호2','전화번호3','보유차량수','차량형태','차량상세','상담이력']];
+  VIEW.forEach(function(r){ rows.push([r.name,r.send,r.callres,resLabel(r.callres),r.kind,r.sojae,r.addr,r.oper,r.tel,r.tel2,r.tel3,r.carN,r.carT,r.carDetail,r.consult]); });
   var csv=rows.map(function(row){return row.map(csvCell).join(',');}).join('\r\n');
   dl('학원목록_'+stamp()+'.csv','﻿'+csv,'text/csv;charset=utf-8');
 }
@@ -736,7 +845,7 @@ function loadFromServer(){
   setSync('loading');
   fetch(API_URL,{method:'GET'}).then(function(r){return r.json();}).then(function(res){
     if(res&&res.ok&&res.rows){
-      var srv={}; res.rows.forEach(function(row){ srv[row.id]={status:row.status,name:row.name,addr:row.addr,oper:row.oper,tel:row.tel,tel2:row.tel2,carN:row.carN,carT:row.carT,carDetail:row.carDetail,kind:row.kind,send:row.send}; });
+      var srv={}; res.rows.forEach(function(row){ srv[row.id]={status:row.status,name:row.name,addr:row.addr,oper:row.oper,tel:row.tel,tel2:row.tel2,carN:row.carN,carT:row.carT,carDetail:row.carDetail,kind:row.kind,send:row.send,consult:row.consult,callres:row.callres}; });
       pending.forEach(function(p){ srv[p.id]=p; }); // 미전송 로컬 변경은 유지
       changes=srv; saveCache(); setSync(pending.length?'err':'ok');
     } else setSync('offline');
@@ -746,18 +855,19 @@ function loadFromServer(){
 
 /* ===== 초기화 ===== */
 function rebuild(){ ALL=buildRecords(); computeDerived(); }
-function rebuildAll(){ rebuild(); buildRegionIndex(); rebuildSido(); fillKind(); fillSend(); fillConsult(); refresh(); }
+function rebuildAll(){ rebuild(); buildRegionIndex(); rebuildSido(); fillKind(); fillSend(); fillConsult(); fillResult(); refresh(); }
 function rebuildSido(){
   var sel=document.getElementById('fSido'), cur=sel.value;
   sel.innerHTML='<option value="">전체 시/도</option>'; fillSido(); sel.value=cur;
 }
 function init(){
   loadCache();
-  rebuild(); buildRegionIndex(); fillSido(); fillGu(); fillKind(); fillSend(); fillConsult();
+  rebuild(); buildRegionIndex(); fillSido(); fillGu(); fillKind(); fillSend(); fillConsult(); fillResult();
   applySharedUI();
   document.getElementById('q').addEventListener('input',debounce(refresh,200));
   document.getElementById('fSend').addEventListener('change',refresh);
   document.getElementById('fConsult').addEventListener('change',refresh);
+  document.getElementById('fResult').addEventListener('change',refresh);
   document.getElementById('fKind').addEventListener('change',refresh);
   document.getElementById('fSido').addEventListener('change',function(){fillGu();refresh();});
   document.getElementById('fGu').addEventListener('change',refresh);
